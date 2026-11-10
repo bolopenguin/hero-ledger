@@ -202,6 +202,8 @@ export interface Rider {
 	applies: 'melee' | 'ranged' | 'spell' | 'weapon' | 'all';
 	when: string;
 	auto?: boolean;
+	/** Controlled by these situational switches (all must be on) instead of per attack. */
+	state?: string[];
 }
 
 export interface CustomFeature {
@@ -328,6 +330,8 @@ export interface Character {
 	picks: Record<string, Pick>;
 	/** Feature key -> chosen option keys (invocations, metamagic, maneuvers…). */
 	choices: Record<string, string[]>;
+	/** Situational switches that are on right now (raging, unarmored, Hunter's Mark…). */
+	active: Record<string, boolean>;
 	edits: Record<string, FeatureEdit>;
 	features: CustomFeature[];
 	used: Record<string, number>;

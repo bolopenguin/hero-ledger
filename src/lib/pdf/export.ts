@@ -258,7 +258,9 @@ class Writer {
 	}
 }
 
-export async function buildPdf(ch: Character, packsUsed: ContentPack[]): Promise<Uint8Array> {
+export async function buildPdf(input: Character, packsUsed: ContentPack[]): Promise<Uint8Array> {
+	// Print the character's normal state: situational switches (raging, hasted…) off.
+	const ch: Character = { ...input, active: {} };
 	const doc = await PDFDocument.create();
 	doc.setTitle(`${ch.name || 'Character'} - Character Sheet`);
 	doc.setCreator('Hero Ledger');

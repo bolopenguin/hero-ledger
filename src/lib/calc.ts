@@ -2,6 +2,7 @@
 import { by, CLASSES } from './data/classes';
 import { ARMOR, BACKGROUNDS, FEATS, FULL_SLOTS, SKILLS, SPECIES, WEAPONS } from './data/srd';
 import { dynamicOptions, STATIC_OPTIONS } from './data/options';
+import { STATES, type StateCtx, type StateDef } from './data/states';
 import {
 	avgDice,
 	critTerms,
@@ -618,7 +619,10 @@ export function skills(ch: Character, sc = scores(ch)) {
 export function armorClass(ch: Character, sc = scores(ch)) {
 	const c = makeCtx(ch, sc);
 	const dex = c.m('dex');
-	const armor = ARMOR[ch.gear.armor];
+	const states = activeStates(ch, sc);
+	const sctx = stateCtx(ch, sc);
+	const unarmored = states.some((st) => st.ac?.ignoreArmor);
+	const armor = unarmored ? undefined : ARMOR[ch.gear.armor];
 	const parts: string[] = [];
 	let base: number;
 	if (armor) {
@@ -626,6 +630,7 @@ export function armorClass(ch: Character, sc = scores(ch)) {
 		base = armor.base + d;
 		parts.push(`${armor.name} ${armor.base}${d ? ` ${signed(d)} Dex` : ''}`);
 	} else {
+		// Pick the best unarmored formula the character has.
 		base = 10 + dex;
 		let label = 'Unarmored 10 + Dex';
 		const opts: [number, string][] = [];
@@ -633,8 +638,12 @@ export function armorClass(ch: Character, sc = scores(ch)) {
 			opts.push([10 + dex + c.m('con'), 'Unarmored Defense (Dex + Con)']);
 		if (ch.classId === 'monk' && !ch.gear.shield)
 			opts.push([10 + dex + c.m('wis'), 'Unarmored Defense (Dex + Wis)']);
-		if (ch.classId === 'sorcerer' && ch.subclassId === 'srd' && ch.level >= 3)
+		if (ch.classId === 'sorcerer' && ch.level >= 3 && sctx.sub('srd'))
 			opts.push([10 + dex + c.m('cha'), 'Draconic Resilience (Dex + Cha)']);
+		if (ch.classId === 'bard' && ch.level >= 3 && sctx.sub('dance') && !ch.gear.shield)
+			opts.push([10 + dex + c.m('cha'), 'Dazzling Footwork (Dex + Cha)']);
+		for (const st of states)
+			if (st.ac?.base) opts.push([st.ac.base(sctx), st.ac.baseLabel ?? st.name]);
 		for (const [v, l] of opts)
 			if (v > base) {
 				base = v;
@@ -654,12 +663,56 @@ export function armorClass(ch: Character, sc = scores(ch)) {
 		base += ch.gear.acMisc;
 		parts.push(`Items ${signed(ch.gear.acMisc)}`);
 	}
+	for (const st of states)
+		if (st.ac?.bonus) {
+			base += st.ac.bonus;
+			parts.push(`${st.name} +${st.ac.bonus}`);
+		}
+	for (const st of states)
+		if (st.ac?.min && base < st.ac.min) {
+			base = st.ac.min;
+			parts.push(`${st.name}: at least ${st.ac.min}`);
+		}
 	return {
 		value: ov(ch, 'ac', base),
 		parts,
 		stealthDis: !!armor?.stealthDis,
 		strReq: armor?.str ?? 0
 	};
+}
+
+// ---------- Situational switches ----------
+
+export function stateCtx(ch: Character, sc = scores(ch)): StateCtx {
+	const c = makeCtx(ch, sc);
+	let spellNames: Set<string> | null = null;
+	return {
+		classId: ch.classId,
+		l: ch.level,
+		pb: c.pb,
+		m: c.m,
+		sub: (id: string) => ch.subclassId === id || ch.subclassId.endsWith(`:${id}`),
+		hasSpell: (name: string) => {
+			spellNames ??= new Set([
+				...ch.spells.list.map((x) => x.name.toLowerCase()),
+				...grantedSpells(ch).map((g) => g.name.toLowerCase())
+			]);
+			return spellNames.has(name.toLowerCase());
+		},
+		speciesId: ch.speciesId,
+		hasArmor: !!ARMOR[ch.gear.armor]
+	};
+}
+
+/** Switches that make sense for this character. */
+export function availableStates(ch: Character, sc = scores(ch)): StateDef[] {
+	const ctx = stateCtx(ch, sc);
+	return STATES.filter((st) => st.available(ctx));
+}
+
+/** Switches that are on and still apply. */
+export function activeStates(ch: Character, sc = scores(ch)): StateDef[] {
+	return availableStates(ch, sc).filter((st) => ch.active?.[st.id]);
 }
 
 export function hpMax(ch: Character, sc = scores(ch)) {
@@ -688,6 +741,7 @@ export function speed(ch: Character) {
 		]);
 	if (ch.classId === 'ranger' && ch.level >= 6 && armor?.type !== 'heavy') v += 10;
 	for (const f of activeFeats(ch)) v += f.def.speed ?? 0;
+	for (const st of activeStates(ch)) v += st.speed ?? 0;
 	return Math.max(0, ov(ch, 'speed', v) - 5 * ch.exhaustion);
 }
 
@@ -751,7 +805,11 @@ export function spellcasting(ch: Character, sc = scores(ch)) {
 		list: (fromSub && sub?.spellList) || cls?.name.toLowerCase() || '',
 		caster: caster ?? null,
 		mod: m,
-		dc: ov(ch, 'spellDc', 8 + m + c.pb + innate),
+		dc: ov(
+			ch,
+			'spellDc',
+			8 + m + c.pb + innate + activeStates(ch, sc).reduce((t, st) => t + (st.spellDc ?? 0), 0)
+		),
 		atk: ov(ch, 'spellAtk', m + c.pb),
 		slots: [...slots, 0, 0, 0, 0, 0, 0, 0, 0, 0].slice(0, 9),
 		pact,
@@ -769,20 +827,6 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 	const r: Rider[] = [];
 	const add = (x: Omit<Rider, 'auto'>) => r.push({ ...x, auto: true });
 	if (ch.classId === 'barbarian') {
-		const rd = by(l, [
-			[1, 2],
-			[9, 3],
-			[16, 4]
-		]);
-		add({
-			id: 'auto:rage',
-			name: 'Rage',
-			dmg: String(rd),
-			type: '',
-			hit: 0,
-			applies: 'melee',
-			when: 'While raging, Strength attacks'
-		});
 		if (l >= 9)
 			add({
 				id: 'auto:brutal',
@@ -792,16 +836,6 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 				hit: 0,
 				applies: 'melee',
 				when: 'Reckless Attack, give up advantage on this attack'
-			});
-		if (ch.subclassId === 'srd' && l >= 3)
-			add({
-				id: 'auto:frenzy',
-				name: 'Frenzy',
-				dmg: `${rd}d6`,
-				type: '',
-				hit: 0,
-				applies: 'melee',
-				when: 'Raging + Reckless, first hit each turn'
 			});
 	}
 	if (ch.classId === 'rogue')
@@ -836,17 +870,7 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 				when: 'Every melee weapon hit'
 			});
 	}
-	if (ch.classId === 'ranger') {
-		add({
-			id: 'auto:mark',
-			name: "Hunter's Mark",
-			dmg: l >= 20 ? '1d10' : '1d6',
-			type: 'Force',
-			hit: 0,
-			applies: 'weapon',
-			when: 'Target is marked'
-		});
-	}
+
 	if (ch.speciesId === 'goliath' && ch.lineage === 'fire')
 		add({
 			id: 'auto:fireburn',
@@ -878,6 +902,11 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 			when: 'Always with Ranged weapons'
 		});
 	for (const r2 of optionEffects(ch).riders) add({ ...r2, dmg: fillTemplate(r2.dmg, c) });
+	for (const st of availableStates(ch))
+		for (const sr of st.riders?.(stateCtx(ch, sc)) ?? []) {
+			const { with: also, ...rest } = sr;
+			add({ ...rest, state: [st.id, ...(also ?? [])] });
+		}
 	for (const f of activeFeats(ch))
 		if (f.def.rider)
 			add({ ...f.def.rider, id: `feat:${f.key}`, dmg: fillTemplate(f.def.rider.dmg, c) });
@@ -907,7 +936,8 @@ export function riderApplies(r: Rider, a: Attack) {
 	return r.applies === a.kind;
 }
 
-export function riderActive(r: Rider, a: Attack) {
+export function riderActive(r: Rider, a: Attack, ch?: Character) {
+	if (r.state && ch) return r.state.every((id) => !!ch.active?.[id]);
 	const v = a.riders[r.id];
 	return v === undefined ? ALWAYS_ON.has(r.id) : v;
 }
@@ -948,7 +978,7 @@ export function attack(ch: Character, a: Attack, sc = scores(ch)): AttackResult 
 	const m = c.m(ability);
 	const riders = allRiders(ch, sc)
 		.filter((r) => riderApplies(r, a))
-		.map((r) => ({ r, on: riderActive(r, a), terms: parseDice(fillTemplate(r.dmg, c)) }));
+		.map((r) => ({ r, on: riderActive(r, a, ch), terms: parseDice(fillTemplate(r.dmg, c)) }));
 	let dice = a.twoHanded && a.versatile ? a.versatile : a.dice;
 	const wd = WEAPONS[a.weapon];
 	const monkWeapon =

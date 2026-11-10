@@ -6,6 +6,7 @@
 	import { newAttack, uid } from '$lib/store.svelte';
 	import { ABILITIES, type Attack, type Rider } from '$lib/types';
 	import FeatureCard from './FeatureCard.svelte';
+	import RightNow from './RightNow.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -64,6 +65,8 @@
 	};
 </script>
 
+<section class="panel mb-3" aria-label="Right now"><RightNow /></section>
+
 <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
 	<section class="panel" aria-labelledby="attacks-h">
 		<div class="mb-2 flex flex-wrap items-center gap-2">
@@ -109,7 +112,7 @@
 								{#each r.riders as x (x.r.id)}
 									<li class="flex items-baseline gap-2 text-sm">
 										<label class="flex min-w-0 flex-1 items-baseline gap-2">
-											<input type="checkbox" class="checkbox checkbox-xs checkbox-primary translate-y-0.5" checked={x.on} onchange={(e) => (a.riders[x.r.id] = e.currentTarget.checked)} />
+											<input type="checkbox" class="checkbox checkbox-xs checkbox-primary translate-y-0.5" checked={x.on} disabled={!!x.r.state} title={x.r.state ? 'Turn it on with the switches at the top' : ''} onchange={(e) => (a.riders[x.r.id] = e.currentTarget.checked)} />
 											<span class="font-medium">{x.r.name}</span>
 											<span class="num">{x.r.dmg ? '+' + x.r.dmg : ''}{x.r.hit ? ` ${signed(x.r.hit)} to hit` : ''}</span>
 											<span class="text-base-content/55 truncate text-xs">{x.r.type} {x.r.when ? '· ' + x.r.when : ''}</span>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib';
 import {
 	allOptions,
+	availableStates,
 	armorClass,
 	extraTraining,
 	masteredWeapons,
@@ -20,7 +21,7 @@ import {
 } from './calc';
 import { installPack, removePack } from './packs.svelte';
 import { avgDice, evalFormula, fillTemplate, formatDice, parseDice } from './formula';
-import { blankCharacter, newAttack, sampleCharacter } from './store.svelte';
+import { blankCharacter, newAttack, newSpell, sampleCharacter } from './store.svelte';
 import { buildPdf } from './pdf/export';
 import { readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
@@ -345,5 +346,59 @@ describe('class tab and equipment', () => {
 			.flatMap((opts) => opts.flatMap((op) => op.items.map(([n]) => n)))
 			.filter((n) => !GEAR_BY_NAME.has(n.toLowerCase()) && !/your|occult/i.test(n));
 		expect(unknown).toEqual([]);
+	});
+});
+
+describe('situational switches', () => {
+	it('Rage and Reckless drive riders; Unarmored and spells change AC', () => {
+		const ch = blankCharacter();
+		ch.classId = 'barbarian';
+		ch.subclassId = 'srd';
+		ch.level = 5;
+		ch.abilities = { str: 16, dex: 14, con: 16, int: 10, wis: 10, cha: 8 };
+		ch.gear.armor = 'hide';
+		ch.attacks = [
+			newAttack({ name: 'Greataxe', weapon: 'greataxe', dice: '1d12', props: 'Heavy, Two-Handed' })
+		];
+		const ids = availableStates(ch).map((s) => s.id);
+		expect(ids).toEqual(expect.arrayContaining(['rage', 'reckless', 'unarmored']));
+		expect(ids).not.toContain('hunters-mark');
+		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 3');
+		ch.active = { rage: true };
+		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 5');
+		ch.active = { rage: true, reckless: true };
+		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 2d6 + 5'); // Frenzy
+		ch.active = { reckless: true };
+		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 3'); // Frenzy needs Rage too
+		expect(armorClass(ch).value).toBe(14); // Hide 12 + Dex 2
+		ch.active = { unarmored: true };
+		expect(armorClass(ch).value).toBe(15); // 10 + Dex 2 + Con 3
+	});
+
+	it("Hunter's Mark, Mage Armor, Shield and Innate Sorcery", () => {
+		const r = blankCharacter();
+		r.classId = 'ranger';
+		r.attacks = [newAttack({ name: 'Longbow', weapon: 'longbow', kind: 'ranged', dice: '1d8' })];
+		expect(attack(r, r.attacks[0]).total).not.toContain('1d6');
+		r.active = { 'hunters-mark': true };
+		expect(attack(r, r.attacks[0]).total).toContain('1d6');
+
+		const w = blankCharacter();
+		w.classId = 'wizard';
+		w.spells.list = [
+			newSpell({ name: 'Mage Armor', level: 1 }),
+			newSpell({ name: 'Shield', level: 1 })
+		];
+		const base = armorClass(w).value;
+		w.active = { 'mage-armor': true };
+		expect(armorClass(w).value).toBe(base + 3);
+		w.active = { 'mage-armor': true, 'shield-spell': true };
+		expect(armorClass(w).value).toBe(base + 8);
+
+		const s = blankCharacter();
+		s.classId = 'sorcerer';
+		const dc = spellcasting(s).dc;
+		s.active = { 'innate-sorcery': true };
+		expect(spellcasting(s).dc).toBe(dc + 1);
 	});
 });

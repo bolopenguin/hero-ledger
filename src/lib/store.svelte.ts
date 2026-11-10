@@ -44,6 +44,7 @@ export function blankCharacter(): Character {
 		riders: [],
 		picks: {},
 		choices: {},
+		active: {},
 		edits: {},
 		features: [],
 		used: {},

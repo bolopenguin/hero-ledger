@@ -24,6 +24,7 @@
 	import { longRest, shortRest } from '$lib/rest';
 	import { ABILITIES, type Ab } from '$lib/types';
 	import Stat from './Stat.svelte';
+	import RightNow from './RightNow.svelte';
 	import Pips from './Pips.svelte';
 
 	const ch = $derived(currentChar());
@@ -274,6 +275,7 @@
 					<span class="text-lg">{sp?.size ?? '—'}</span>
 				</div>
 			</div>
+			<div class="border-base-300 mt-3 border-t pt-2"><RightNow compact /></div>
 			{#if darkvision(ch) || ac.stealthDis}
 				<p class="text-base-content/65 mt-2 text-xs">
 					{#if darkvision(ch)}Darkvision {darkvision(ch)} ft.{/if}
