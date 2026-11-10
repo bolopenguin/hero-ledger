@@ -27,6 +27,30 @@ export interface Feature {
 	subslot?: boolean;
 	/** Uses represent a pool of points (e.g. Lay On Hands) rather than checkboxes. */
 	pool?: boolean;
+	/** Spells this feature always prepares, by the level they arrive at. */
+	spells?: SpellGrant[];
+	/** Lets the player pick entries from a named option list (invocations, metamagic…). */
+	choose?: { list: string; count: ((c: Ctx) => number) | string };
+}
+
+export interface SpellGrant {
+	l: number;
+	names: string[];
+}
+
+export interface OptionItem {
+	name: string;
+	d: string;
+	/** Minimum character level. */
+	l?: number;
+	prereq?: string;
+	repeatable?: boolean;
+	spells?: string[];
+}
+
+export interface OptionList {
+	label: string;
+	items: Record<string, OptionItem>;
 }
 
 export interface ClassDef {
@@ -52,7 +76,7 @@ export interface SpeciesDef {
 	size: string;
 	speed: number;
 	darkvision?: number;
-	lineages?: { id: string; name: string; d: string }[];
+	lineages?: { id: string; name: string; d: string; spells?: SpellGrant[] }[];
 	lineageLabel?: string;
 	features: Feature[];
 }
@@ -72,6 +96,21 @@ export interface FeatDef {
 	prereq?: string;
 	d: Text;
 	repeatable?: boolean;
+	/** Abilities the feat's +1 can go to. Absent means the feat gives no increase. */
+	abilities?: Ab[];
+	u?: ((c: Ctx) => number) | string;
+	r?: Recharge;
+	a?: ActionType;
+	pool?: boolean;
+	/** Extra damage the sheet can add to attacks. */
+	rider?: Omit<Rider, 'id' | 'auto'>;
+	/** HP maximum bonus per character level (Tough) and flat (Boon of Fortitude). */
+	hp?: number;
+	hpFlat?: number;
+	speed?: number;
+	/** The ability raised by this feat also gains saving throw proficiency (Resilient). */
+	saveFromAsi?: boolean;
+	spells?: SpellGrant[];
 }
 
 export interface WeaponDef {
@@ -258,6 +297,8 @@ export interface Character {
 	attacks: Attack[];
 	riders: Rider[];
 	picks: Record<string, Pick>;
+	/** Feature key -> chosen option keys (invocations, metamagic, maneuvers…). */
+	choices: Record<string, string[]>;
 	edits: Record<string, FeatureEdit>;
 	features: CustomFeature[];
 	used: Record<string, number>;

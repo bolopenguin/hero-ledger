@@ -43,6 +43,7 @@ export function blankCharacter(): Character {
 		attacks: [],
 		riders: [],
 		picks: {},
+		choices: {},
 		edits: {},
 		features: [],
 		used: {},

@@ -131,16 +131,31 @@ export const SPECIES: Record<string, SpeciesDef> = {
 		lineages: [
 			{
 				id: 'drow',
+				spells: [
+					{ l: 1, names: ['Dancing Lights'] },
+					{ l: 3, names: ['Faerie Fire'] },
+					{ l: 5, names: ['Darkness'] }
+				],
 				name: 'Drow',
 				d: 'Darkvision 120 ft; Dancing Lights cantrip. Level 3: Faerie Fire. Level 5: Darkness.'
 			},
 			{
 				id: 'high',
+				spells: [
+					{ l: 1, names: ['Prestidigitation'] },
+					{ l: 3, names: ['Detect Magic'] },
+					{ l: 5, names: ['Misty Step'] }
+				],
 				name: 'High Elf',
 				d: 'Prestidigitation cantrip (swap on a Long Rest for another Wizard cantrip). Level 3: Detect Magic. Level 5: Misty Step.'
 			},
 			{
 				id: 'wood',
+				spells: [
+					{ l: 1, names: ['Druidcraft'] },
+					{ l: 3, names: ['Longstrider'] },
+					{ l: 5, names: ['Pass without Trace'] }
+				],
 				name: 'Wood Elf',
 				d: 'Speed 35 ft; Druidcraft cantrip. Level 3: Longstrider. Level 5: Pass without Trace.'
 			}
@@ -182,11 +197,13 @@ export const SPECIES: Record<string, SpeciesDef> = {
 		lineages: [
 			{
 				id: 'forest',
+				spells: [{ l: 1, names: ['Minor Illusion', 'Speak with Animals'] }],
 				name: 'Forest Gnome',
 				d: 'Minor Illusion cantrip. Speak with Animals always prepared, cast without a slot PB times per Long Rest.'
 			},
 			{
 				id: 'rock',
+				spells: [{ l: 1, names: ['Mending', 'Prestidigitation'] }],
 				name: 'Rock Gnome',
 				d: 'Mending and Prestidigitation cantrips. Spend 10 min to build a Tiny clockwork device (AC 5, 1 HP) with a simple effect.'
 			}
@@ -355,16 +372,31 @@ export const SPECIES: Record<string, SpeciesDef> = {
 		lineages: [
 			{
 				id: 'abyssal',
+				spells: [
+					{ l: 1, names: ['Poison Spray'] },
+					{ l: 3, names: ['Ray of Sickness'] },
+					{ l: 5, names: ['Hold Person'] }
+				],
 				name: 'Abyssal',
 				d: 'Resistance to Poison; Poison Spray cantrip. Level 3: Ray of Sickness. Level 5: Hold Person.'
 			},
 			{
 				id: 'chthonic',
+				spells: [
+					{ l: 1, names: ['Chill Touch'] },
+					{ l: 3, names: ['False Life'] },
+					{ l: 5, names: ['Ray of Enfeeblement'] }
+				],
 				name: 'Chthonic',
 				d: 'Resistance to Necrotic; Chill Touch cantrip. Level 3: False Life. Level 5: Ray of Enfeeblement.'
 			},
 			{
 				id: 'infernal',
+				spells: [
+					{ l: 1, names: ['Fire Bolt'] },
+					{ l: 3, names: ['Hellish Rebuke'] },
+					{ l: 5, names: ['Darkness'] }
+				],
 				name: 'Infernal',
 				d: 'Resistance to Fire; Fire Bolt cantrip. Level 3: Hellish Rebuke. Level 5: Darkness.'
 			}
@@ -377,7 +409,13 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				a: 'passive',
 				d: 'Legacy spells: cast the level 3 and 5 spells once per Long Rest without a slot, or with slots. Choose Int, Wis or Cha as the spellcasting ability.'
 			},
-			{ l: 1, n: 'Otherworldly Presence', a: 'passive', d: 'You know the Thaumaturgy cantrip.' }
+			{
+				l: 1,
+				n: 'Otherworldly Presence',
+				spells: [{ l: 1, names: ['Thaumaturgy'] }],
+				a: 'passive',
+				d: 'You know the Thaumaturgy cantrip.'
+			}
 		]
 	}
 };
@@ -458,8 +496,9 @@ export const FEATS: Record<string, FeatDef> = {
 	grappler: {
 		name: 'Grappler',
 		cat: 'general',
+		abilities: ['str', 'dex'],
 		prereq: 'Level 4+, Str or Dex 13+',
-		d: 'Str or Dex +1. Punch and Grab: once per turn, an Unarmed Strike hit during the Attack action can both damage and grapple. Advantage on attacks against creatures you grapple. Moving a grappled creature your size or smaller costs no extra movement.'
+		d: 'Punch and Grab: once per turn, an Unarmed Strike hit during the Attack action can both damage and grapple. Advantage on attacks against creatures you grapple. Moving a grappled creature your size or smaller costs no extra movement.'
 	},
 	archery: { name: 'Archery', cat: 'style', d: '+2 bonus to attack rolls with Ranged weapons.' },
 	defense: {
@@ -480,36 +519,43 @@ export const FEATS: Record<string, FeatDef> = {
 	'boon-combat': {
 		name: 'Boon of Combat Prowess',
 		cat: 'epic',
-		d: 'Ability score +1 (max 30). Once per turn when you miss with an attack, you can hit instead.'
+		abilities: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
+		d: 'Ability score +1 (max 30). When you miss with an attack roll you can hit instead; usable again at the start of your next turn.'
 	},
 	'boon-dimensional': {
 		name: 'Boon of Dimensional Travel',
 		cat: 'epic',
+		abilities: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
 		d: 'Ability score +1 (max 30). Right after the Attack or Magic action, teleport up to 30 ft to a space you can see.'
 	},
 	'boon-fate': {
 		name: 'Boon of Fate',
 		cat: 'epic',
+		abilities: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
 		d: 'Ability score +1 (max 30). When you or a creature within 60 ft succeeds or fails a D20 Test, roll 2d4 and add or subtract it. Once per Initiative or rest.'
 	},
 	'boon-offense': {
 		name: 'Boon of Irresistible Offense',
 		cat: 'epic',
+		abilities: ['str', 'dex'],
 		d: 'Str or Dex +1 (max 30). Your Bludgeoning, Piercing and Slashing damage ignores Resistance. On a natural 20, add extra damage equal to the increased score.'
 	},
 	'boon-recall': {
 		name: 'Boon of Spell Recall',
 		cat: 'epic',
-		d: 'Int, Wis or Cha +1 (max 30). Once per Long Rest, cast a prepared spell of level 1–4 without a slot.'
+		abilities: ['int', 'wis', 'cha'],
+		d: 'Int, Wis or Cha +1 (max 30). When you cast a spell with a level 1–4 slot, roll 1d4: if it equals the slot level, the slot is not spent.'
 	},
 	'boon-night': {
 		name: 'Boon of the Night Spirit',
 		cat: 'epic',
+		abilities: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
 		d: 'Ability score +1 (max 30). In Dim Light or Darkness: Bonus Action to become Invisible, and Resistance to all damage except Psychic and Radiant.'
 	},
 	'boon-truesight': {
 		name: 'Boon of Truesight',
 		cat: 'epic',
+		abilities: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
 		d: 'Ability score +1 (max 30). Truesight 60 ft.'
 	}
 };

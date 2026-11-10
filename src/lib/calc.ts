@@ -10,7 +10,13 @@ import {
 	parseDice,
 	type DiceTerm
 } from './formula';
-import { allPackBackgrounds, allPackFeats, allPackSpecies, findPackSubclass } from './packs.svelte';
+import {
+	allPackBackgrounds,
+	allPackFeats,
+	allPackOptions,
+	allPackSpecies,
+	findPackSubclass
+} from './packs.svelte';
 import {
 	ABILITIES,
 	type Ab,
@@ -25,7 +31,8 @@ import {
 	type PickKind,
 	type Recharge,
 	type Rider,
-	type SpeciesDef
+	type SpeciesDef,
+	type SpellGrant
 } from './types';
 
 export const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -97,11 +104,40 @@ export function subclassName(ch: Character): string {
 /** Points of ability increase a feat gives through its picker. */
 export function featAsiPoints(featKey: string): number {
 	if (featKey === 'asi' || featKey === 'custom') return 2;
-	const f = allFeats()[featKey];
-	if (!f) return 0;
-	if (f.cat === 'epic' || featKey === 'grappler') return 1;
-	if (f.cat === 'general') return 1; // most general feats give +1
-	return 0;
+	return allFeats()[featKey]?.abilities?.length ? 1 : 0;
+}
+
+/** Abilities a feat's increase can go to. */
+export function featAbilities(featKey: string): Ab[] {
+	if (featKey === 'asi' || featKey === 'custom') return [...ABILITIES];
+	return allFeats()[featKey]?.abilities ?? [];
+}
+
+/** Feats the character currently has: picked at a reached level, or from the background. */
+export function activeFeats(ch: Character): { key: string; def: FeatDef; pickKey?: string }[] {
+	const out: { key: string; def: FeatDef; pickKey?: string }[] = [];
+	const all = allFeats();
+	for (const k of visibleFeatureKeys(ch)) {
+		const p = ch.picks[k];
+		if (p?.feat && all[p.feat]) out.push({ key: p.feat, def: all[p.feat], pickKey: k });
+	}
+	const bg = getBackground(ch);
+	if (bg?.feat && all[bg.feat]) out.push({ key: bg.feat, def: all[bg.feat] });
+	return out;
+}
+
+/** Read "Always prepared. 3: A, B. 5: C." style text into spell grants. */
+export function parseGrants(text: string): SpellGrant[] | undefined {
+	if (!/always (have .* )?prepared/i.test(text)) return undefined;
+	const out: SpellGrant[] = [];
+	for (const m of text.matchAll(/\b(\d{1,2}): ([^.:]+)\./g)) {
+		const names = m[2]
+			.split(/,\s*/)
+			.map((s) => s.trim())
+			.filter(Boolean);
+		if (names.length) out.push({ l: Number(m[1]), names });
+	}
+	return out.length ? out : undefined;
 }
 
 export interface ScoreInfo {
@@ -179,6 +215,12 @@ export interface RFeature {
 	customId?: string;
 	/** Key of the feature whose picker produced this feat. */
 	pickedBy?: string;
+	/** Feat key when this entry is a feat. */
+	featKey?: string;
+	/** Always-prepared spells this feature gives. */
+	spells?: SpellGrant[];
+	/** Option list the player picks from, and how many. */
+	choose?: { list: string; count: number };
 }
 
 function text(t: Feature['d'], c: Ctx) {
@@ -219,11 +261,19 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 		const c = makeCtx(ch, sc);
 		const key = extra.key ?? keyFor(src, f.l, f.n);
 		const e = ch.edits[key] ?? {};
+		const d = e.d !== undefined ? fillTemplate(e.d, c) : text(f.d, c);
+		const count = f.choose
+			? typeof f.choose.count === 'function'
+				? f.choose.count(c)
+				: (evalFormula(f.choose.count, c) ?? 0)
+			: 0;
 		const r: RFeature = {
 			key,
 			l: f.l,
 			n: e.n ?? f.n,
-			d: e.d !== undefined ? fillTemplate(e.d, c) : text(f.d, c),
+			d,
+			spells: f.spells ?? parseGrants(d),
+			choose: f.choose ? { list: f.choose.list, count: Math.max(0, Math.floor(count)) } : undefined,
 			a: f.a,
 			src,
 			uses: usesOf(f, c),
@@ -251,11 +301,16 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 					l: f.l,
 					n: fe.n ?? name,
 					d: fe.d !== undefined ? fillTemplate(fe.d, c) : desc,
-					a: 'passive',
+					a: fd?.a ?? 'passive',
 					src: 'Feat',
-					uses: null,
-					r: '',
-					pool: false,
+					featKey: p.feat,
+					spells: fd?.spells,
+					uses:
+						fd?.u !== undefined
+							? usesOf({ l: f.l, n: name, a: 'passive', d: '', u: fd.u }, c)
+							: null,
+					r: fd?.r ?? '',
+					pool: !!fd?.pool,
 					placeholder: false,
 					edited: fe.n !== undefined || fe.d !== undefined,
 					notes: fe.notes ?? '',
@@ -289,13 +344,27 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 	if (sp) {
 		for (const f of sp.features) push(f, 'Species');
 		const lin = sp.lineages?.find((x) => x.id === ch.lineage);
-		if (lin) push({ l: 1, n: lin.name, a: 'passive', d: lin.d }, 'Species');
+		if (lin) push({ l: 1, n: lin.name, a: 'passive', d: lin.d, spells: lin.spells }, 'Species');
 	}
 
 	const bg = getBackground(ch);
 	if (bg) {
 		const fd = bg.feat ? allFeats()[bg.feat] : null;
-		if (fd) push({ l: 1, n: fd.name, a: 'passive', d: fd.d }, 'Background');
+		if (fd)
+			push(
+				{
+					l: 1,
+					n: fd.name,
+					a: fd.a ?? 'passive',
+					d: fd.d,
+					u: fd.u,
+					r: fd.r,
+					pool: fd.pool,
+					spells: fd.spells
+				},
+				'Background',
+				{ featKey: bg.feat }
+			);
 		else
 			push(
 				{
@@ -374,9 +443,32 @@ export function visibleFeatureKeys(ch: Character): string[] {
 }
 
 export function hasFeat(ch: Character, featKey: string): boolean {
-	const keys = new Set(visibleFeatureKeys(ch));
-	if (Object.entries(ch.picks).some(([k, p]) => keys.has(k) && p.feat === featKey)) return true;
-	return getBackground(ch)?.feat === featKey;
+	return activeFeats(ch).some((f) => f.key === featKey || f.key.endsWith(':' + featKey));
+}
+
+export interface GrantedSpell {
+	name: string;
+	source: string;
+}
+
+/** Spells that features, feats, species and chosen options keep always prepared. */
+export function grantedSpells(ch: Character): GrantedSpell[] {
+	const out = new Map<string, GrantedSpell>();
+	const add = (name: string, source: string) => {
+		const k = name.toLowerCase();
+		if (!out.has(k)) out.set(k, { name, source });
+	};
+	const options = allPackOptions();
+	for (const f of features(ch)) {
+		if (f.hidden) continue;
+		for (const g of f.spells ?? []) if (g.l <= ch.level) for (const n of g.names) add(n, f.n);
+		if (f.choose)
+			for (const k of ch.choices[f.key] ?? []) {
+				const it = options[f.choose.list]?.items[k];
+				if (it && (it.l ?? 1) <= ch.level) for (const n of it.spells ?? []) add(n, it.name);
+			}
+	}
+	return [...out.values()];
 }
 
 // ---------- Core stats ----------
@@ -385,12 +477,18 @@ export function saves(ch: Character, sc = scores(ch)) {
 	const c = makeCtx(ch, sc);
 	const cls = getClass(ch);
 	const aura = ch.classId === 'paladin' && ch.level >= 6 ? Math.max(1, c.m('cha')) : 0;
+	// Resilient-style feats: the raised ability also gets save proficiency.
+	const featSaves = new Set<Ab>();
+	for (const f of activeFeats(ch))
+		if (f.def.saveFromAsi && f.pickKey)
+			for (const ab of ABILITIES) if ((ch.picks[f.pickKey]?.asi?.[ab] ?? 0) > 0) featSaves.add(ab);
 	const out = {} as Record<Ab, { prof: boolean; auto: boolean; value: number }>;
 	for (const ab of ABILITIES) {
 		const auto =
 			!!cls?.saves.includes(ab) ||
 			(ch.classId === 'monk' && ch.level >= 14) ||
-			(ch.classId === 'rogue' && ch.level >= 15 && (ab === 'wis' || ab === 'cha'));
+			(ch.classId === 'rogue' && ch.level >= 15 && (ab === 'wis' || ab === 'cha')) ||
+			featSaves.has(ab);
 		const prof = auto || !!ch.saveProf[ab];
 		out[ab] = { prof, auto, value: ov(ch, `save.${ab}`, c.m(ab) + (prof ? c.pb : 0) + aura) };
 	}
@@ -464,6 +562,7 @@ export function hpMax(ch: Character, sc = scores(ch)) {
 	let v = hd + (hd / 2 + 1) * (ch.level - 1) + c.m('con') * ch.level;
 	if (ch.speciesId === 'dwarf') v += ch.level;
 	if (ch.classId === 'sorcerer' && ch.subclassId === 'srd' && ch.level >= 3) v += ch.level;
+	for (const f of activeFeats(ch)) v += (f.def.hp ?? 0) * ch.level + (f.def.hpFlat ?? 0);
 	return Math.max(1, ov(ch, 'hpMax', v));
 }
 
@@ -482,6 +581,7 @@ export function speed(ch: Character) {
 			[18, 30]
 		]);
 	if (ch.classId === 'ranger' && ch.level >= 6 && armor?.type !== 'heavy') v += 10;
+	for (const f of activeFeats(ch)) v += f.def.speed ?? 0;
 	return Math.max(0, ov(ch, 'speed', v) - 5 * ch.exhaustion);
 }
 
@@ -701,6 +801,9 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 			applies: 'ranged',
 			when: 'Always with Ranged weapons'
 		});
+	for (const f of activeFeats(ch))
+		if (f.def.rider)
+			add({ ...f.def.rider, id: `feat:${f.key}`, dmg: fillTemplate(f.def.rider.dmg, c) });
 	return r;
 }
 

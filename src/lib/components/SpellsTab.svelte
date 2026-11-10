@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Plus, Trash2 } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { getClass, scores, signed, spellcasting } from '$lib/calc';
+	import { getClass, grantedSpells, scores, signed, spellcasting } from '$lib/calc';
 	import { AB_NAMES } from '$lib/data/srd';
 	import { newSpell } from '$lib/store.svelte';
 	import { allPackSpells } from '$lib/packs.svelte';
@@ -21,6 +21,14 @@
 
 	// Spell search from content packs.
 	const library = $derived(allPackSpells());
+	const byName = $derived(new Map(library.map((x) => [x.name.toLowerCase(), x])));
+	// Spells your features keep prepared; ones you also added by hand stay in your list.
+	const granted = $derived(
+		grantedSpells(ch)
+			.filter((g) => !ch.spells.list.some((x) => x.name.toLowerCase() === g.name.toLowerCase()))
+			.map((g) => ({ ...g, def: byName.get(g.name.toLowerCase()) }))
+			.sort((a, b) => (a.def?.level ?? 0) - (b.def?.level ?? 0) || a.name.localeCompare(b.name))
+	);
 	let query = $state('');
 	let classOnly = $state(true);
 	let maxLevelOnly = $state(true);
@@ -28,7 +36,7 @@
 	const maxSpellLevel = $derived(s.pact ? s.pact.level : Math.max(0, ...s.slots.map((n, i) => (n ? i + 1 : 0))));
 	const matches = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		const have = new Set(ch.spells.list.map((x) => x.name.toLowerCase()));
+		const have = new Set([...ch.spells.list.map((x) => x.name.toLowerCase()), ...granted.map((g) => g.name.toLowerCase())]);
 		return library
 			.filter((x) => !have.has(x.name.toLowerCase()))
 			.filter((x) => !classOnly || !className || x.classes.some((c) => c.toLowerCase() === className))
@@ -92,6 +100,36 @@
 			<p class="text-base-content/60 mt-2 text-sm">Your class has no spell slots at this level. Spells from feats or species still go in the list below.</p>
 		{/if}
 	</section>
+
+	{#if granted.length}
+		<section class="panel" aria-labelledby="ap-h">
+			<h2 id="ap-h" class="panel-title">Always prepared <span class="text-base-content/50 font-sans text-xs font-normal tracking-normal normal-case">from your features; they don't count against your prepared spells</span></h2>
+			<div class="overflow-x-auto">
+				<table class="table-sm table min-w-[46rem]">
+					<thead>
+						<tr class="label-xs"><th class="w-12">Lvl</th><th>Name</th><th>Casting time</th><th>Range</th><th>Duration</th><th>Comp.</th><th>From</th></tr>
+					</thead>
+					<tbody>
+						{#each granted as g (g.name)}
+							<tr>
+								<td class="num">{g.def ? (g.def.level === 0 ? 'C' : g.def.level) : '—'}</td>
+								<td>
+									<span class="font-semibold">{g.name}</span>
+									{#if g.def?.conc}<span class="tag ml-1">C</span>{/if}{#if g.def?.ritual}<span class="tag ml-1">R</span>{/if}
+									{#if g.def}<p class="text-base-content/65 max-w-md text-xs">{g.def.d}</p>{/if}
+								</td>
+								<td class="text-sm">{g.def?.time ?? ''}</td>
+								<td class="text-sm">{g.def?.range ?? ''}</td>
+								<td class="text-sm">{g.def?.duration ?? ''}</td>
+								<td class="text-sm">{g.def?.comp ?? ''}{#if g.def?.cost}<span class="text-secondary ml-1 font-semibold">{g.def.cost} GP{g.def.consumed ? ' (used up)' : ''}</span>{/if}</td>
+								<td class="text-base-content/60 text-xs">{g.source}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{/if}
 
 	<section class="panel" aria-labelledby="sl-h">
 		<div class="mb-2 flex items-center gap-2">

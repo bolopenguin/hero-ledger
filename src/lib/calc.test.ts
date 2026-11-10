@@ -3,15 +3,19 @@ import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib';
 import {
 	armorClass,
 	attack,
+	autoRiders,
 	features,
+	grantedSpells,
 	hpMax,
 	initiative,
 	makeCtx,
 	saves,
 	scores,
 	skills,
+	speed,
 	spellcasting
 } from './calc';
+import { installPack, removePack } from './packs.svelte';
 import { avgDice, evalFormula, fillTemplate, formatDice, parseDice } from './formula';
 import { blankCharacter, newAttack, sampleCharacter } from './store.svelte';
 import { buildPdf } from './pdf/export';
@@ -142,5 +146,78 @@ describe('PDF round trip', () => {
 		doc.addPage();
 		const b = await doc.save();
 		await expect(readPdf(b.buffer as ArrayBuffer)).rejects.toThrow(/no character data/);
+	});
+});
+
+describe('always-prepared spells, feat effects and option choices', () => {
+	it('reads domain spells and explicit grants by level', () => {
+		const ch = blankCharacter();
+		ch.classId = 'cleric';
+		ch.subclassId = 'srd';
+		ch.level = 5;
+		const names = grantedSpells(ch).map((g) => g.name);
+		expect(names).toEqual(
+			expect.arrayContaining(['Aid', 'Bless', 'Mass Healing Word', 'Revivify'])
+		);
+		expect(names).not.toContain('Death Ward'); // level 7
+		const r = blankCharacter();
+		r.classId = 'ranger';
+		expect(grantedSpells(r).map((g) => g.name)).toContain("Hunter's Mark");
+		const t = blankCharacter();
+		t.speciesId = 'tiefling';
+		t.lineage = 'infernal';
+		t.level = 3;
+		expect(grantedSpells(t).map((g) => g.name)).toEqual(
+			expect.arrayContaining(['Fire Bolt', 'Hellish Rebuke', 'Thaumaturgy'])
+		);
+	});
+
+	it('applies feat effects and option list choices from a pack', () => {
+		installPack({
+			id: 'test-pack',
+			name: 'Test pack',
+			feats: {
+				sturdy: {
+					name: 'Sturdy',
+					cat: 'general',
+					abilities: ['con'],
+					hp: 2,
+					speed: 10,
+					saveFromAsi: true,
+					d: 'x',
+					rider: { name: 'Bonk', dmg: '{pb}', type: '', hit: 0, applies: 'melee', when: 'always' }
+				}
+			},
+			options: {
+				invocations: {
+					label: 'Eldritch Invocations',
+					items: { mask: { name: 'Mask', d: 'Disguise', l: 2, spells: ['Disguise Self'] } }
+				}
+			}
+		});
+		const ch = blankCharacter();
+		ch.classId = 'fighter';
+		ch.level = 4;
+		const base = { hp: hpMax(ch), speed: speed(ch), con: saves(ch).con.prof };
+		ch.picks['Class|4|Ability Score Improvement'] = {
+			feat: 'pack:test-pack:sturdy',
+			asi: { con: 1 }
+		};
+		expect(hpMax(ch)).toBe(base.hp + 8 + 4); // +2/level, and Con 13 -> 14 raises the mod by 1
+		expect(speed(ch)).toBe(base.speed + 10);
+		expect(saves(ch).con.prof).toBe(true);
+		expect(autoRiders(ch).some((r) => r.name === 'Bonk' && r.dmg === '2')).toBe(true);
+		// ASI instead of the feat removes the effects
+		ch.picks['Class|4|Ability Score Improvement'] = { feat: 'asi', asi: { str: 2 } };
+		expect(speed(ch)).toBe(base.speed);
+
+		const w = blankCharacter();
+		w.classId = 'warlock';
+		w.level = 2;
+		const inv = features(w).find((f) => f.n === 'Eldritch Invocations')!;
+		expect(inv.choose).toEqual({ list: 'invocations', count: 3 });
+		w.choices[inv.key] = ['mask'];
+		expect(grantedSpells(w).map((g) => g.name)).toContain('Disguise Self');
+		removePack('test-pack');
 	});
 });

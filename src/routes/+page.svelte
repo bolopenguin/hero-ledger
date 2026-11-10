@@ -12,7 +12,7 @@
 		X
 	} from 'lucide-svelte';
 	import { app, addCharacter, blankCharacter, deleteCharacter, initStore, normalize, persist, uid } from '$lib/store.svelte';
-	import { EXAMPLE_PACK, initPacks, installPack, packs, packsUsedBy, removePack, validatePack, type ContentPack } from '$lib/packs.svelte';
+	import { EXAMPLE_PACK, initPacks, installPack, loadDevPacks, packs, packsUsedBy, removePack, validatePack, type ContentPack } from '$lib/packs.svelte';
 	import { currentChar } from '$lib/current.svelte';
 	import { getClass, subclassName } from '$lib/calc';
 	import SheetTab from '$lib/components/SheetTab.svelte';
@@ -43,6 +43,7 @@
 	onMount(() => {
 		initPacks();
 		initStore();
+		loadDevPacks();
 		try {
 			theme = (localStorage.getItem('hero-ledger:theme') as typeof theme) ?? '';
 		} catch {

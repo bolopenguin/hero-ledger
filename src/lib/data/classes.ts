@@ -302,6 +302,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 20,
 				n: 'Words of Creation',
+				spells: [{ l: 20, names: ['Power Word Heal', 'Power Word Kill'] }],
 				a: 'passive',
 				d: 'Power Word Heal and Power Word Kill are always prepared. Each can target a second creature within 10 ft of the first.'
 			}
@@ -509,6 +510,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Druidic',
+				spells: [{ l: 1, names: ['Speak with Animals'] }],
 				a: 'passive',
 				d: 'You know Druidic, the secret language of druids. Speak with Animals is always prepared.'
 			},
@@ -1043,6 +1045,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 2,
 				n: "Paladin's Smite",
+				spells: [{ l: 2, names: ['Divine Smite'] }],
 				a: 'bonus',
 				r: 'long',
 				u: () => 1,
@@ -1062,6 +1065,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 5,
 				n: 'Faithful Steed',
+				spells: [{ l: 5, names: ['Find Steed'] }],
 				a: 'action',
 				r: 'long',
 				u: () => 1,
@@ -1183,6 +1187,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Favored Enemy',
+				spells: [{ l: 1, names: ["Hunter's Mark"] }],
 				a: 'bonus',
 				r: 'long',
 				u: (c) =>
@@ -1509,6 +1514,15 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 2,
 				n: 'Metamagic',
+				choose: {
+					list: 'metamagic',
+					count: (c) =>
+						by(c.l, [
+							[2, 2],
+							[10, 4],
+							[17, 6]
+						])
+				},
 				a: 'passive',
 				d: (c) =>
 					`Know ${by(c.l, [
@@ -1580,6 +1594,7 @@ export const CLASSES: Record<string, ClassDef> = {
 				{
 					l: 18,
 					n: 'Dragon Companion',
+					spells: [{ l: 18, names: ['Summon Dragon'] }],
 					a: 'action',
 					r: 'long',
 					u: () => 1,
@@ -1621,6 +1636,20 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Eldritch Invocations',
+				choose: {
+					list: 'invocations',
+					count: (c) =>
+						by(c.l, [
+							[1, 1],
+							[2, 3],
+							[5, 5],
+							[7, 6],
+							[9, 7],
+							[12, 8],
+							[15, 9],
+							[18, 10]
+						])
+				},
 				a: 'passive',
 				d: (c) =>
 					`Know ${by(c.l, [
@@ -1632,7 +1661,7 @@ export const CLASSES: Record<string, ClassDef> = {
 						[12, 8],
 						[15, 9],
 						[18, 10]
-					])} invocations. Swap one when you gain a level. (Add each as a custom feature.)`
+					])} invocations. Swap one when you gain a level.`
 			},
 			{
 				l: 1,
@@ -1662,6 +1691,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 9,
 				n: 'Contact Patron',
+				spells: [{ l: 9, names: ['Contact Other Plane'] }],
 				a: 'action',
 				r: 'long',
 				u: () => 1,

@@ -6,7 +6,8 @@
 //   spells*.json        -> arrays of spells
 //   feats.json          -> object of feats
 //   species.json        -> object of species
-//   backgrounds.json    -> object of backgrounds
+//   backgrounds*.json   -> object of backgrounds
+//   options*.json       -> named option lists (invocations, metamagic, maneuvers)
 //   any other *.json    -> arrays of subclasses
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
@@ -29,7 +30,8 @@ const pack = {
 	spells: [],
 	feats: {},
 	species: {},
-	backgrounds: {}
+	backgrounds: {},
+	options: {}
 };
 const problems = [];
 
@@ -44,9 +46,10 @@ for (const f of readdirSync(dir)
 		continue;
 	}
 	if (f.startsWith('spells')) pack.spells.push(...data);
-	else if (f === 'feats.json') Object.assign(pack.feats, data);
-	else if (f === 'species.json') Object.assign(pack.species, data);
-	else if (f === 'backgrounds.json') Object.assign(pack.backgrounds, data);
+	else if (f.startsWith('feats')) Object.assign(pack.feats, data);
+	else if (f.startsWith('species')) Object.assign(pack.species, data);
+	else if (f.startsWith('backgrounds')) Object.assign(pack.backgrounds, data);
+	else if (f.startsWith('options')) Object.assign(pack.options, data);
 	else pack.subclasses.push(...data);
 }
 

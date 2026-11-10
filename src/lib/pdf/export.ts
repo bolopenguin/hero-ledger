@@ -23,6 +23,10 @@ import {
 	spellcasting,
 	subclassName
 } from '../calc';
+import { grantedSpells } from '../calc';
+import { allPackOptions, allPackSpells } from '../packs.svelte';
+import { fillTemplate } from '../formula';
+import { newSpell } from '../store.svelte';
 import { AB_NAMES, ACTION_LABELS, ARMOR, SKILLS } from '../data/srd';
 import type { ContentPack } from '../packs.svelte';
 import { ABILITIES, type Character } from '../types';
@@ -505,13 +509,43 @@ export async function buildPdf(ch: Character, packsUsed: ContentPack[]): Promise
 			}
 		}
 		if (f.d) w.para(f.d, M + 8, w.W - 8, 8.5, w.f, INK, 1.3);
+		if (f.choose) {
+			const list = allPackOptions()[f.choose.list];
+			for (const k of ch.choices[f.key] ?? []) {
+				const it = list?.items[k];
+				if (it)
+					w.para(`- ${it.name}: ${fillTemplate(it.d, c)}`, M + 16, w.W - 16, 8, w.f, INK, 1.3);
+			}
+		}
 		if (f.notes) w.para(`Note: ${f.notes}`, M + 8, w.W - 8, 8, w.i, ACCENT, 1.3);
 		w.y -= 3;
 	}
 
 	// ---------------- Spells ----------------
 	const s = spellcasting(ch, sc);
-	if (s.ability || ch.spells.list.length) {
+	// Always-prepared spells from features, filled in from the pack's spell list.
+	const lib = new Map(allPackSpells().map((x) => [x.name.toLowerCase(), x]));
+	const grantedRows = grantedSpells(ch)
+		.filter((g) => !ch.spells.list.some((x) => x.name.toLowerCase() === g.name.toLowerCase()))
+		.map((g) => {
+			const d = lib.get(g.name.toLowerCase());
+			return newSpell({
+				name: g.name,
+				always: true,
+				level: d?.level ?? 0,
+				time: d?.time ?? '',
+				range: d?.range ?? '',
+				duration: d?.duration ?? '',
+				conc: !!d?.conc,
+				ritual: !!d?.ritual,
+				comp: d?.comp ?? '',
+				cost: d?.cost ?? 0,
+				consumed: !!d?.consumed,
+				desc: d?.d ?? '',
+				notes: `From ${g.source}`
+			});
+		});
+	if (s.ability || ch.spells.list.length || grantedRows.length) {
 		w.newPage();
 		w.heading('Spellcasting');
 		w.y -= 16;
@@ -550,7 +584,7 @@ export async function buildPdf(ch: Character, packsUsed: ContentPack[]): Promise
 		w.ensure(20);
 		w.y -= 12;
 		for (const [l, x] of cols) w.label(l, M + x, w.y);
-		const list = [...ch.spells.list].sort(
+		const list = [...ch.spells.list, ...grantedRows].sort(
 			(a, b) => a.level - b.level || a.name.localeCompare(b.name)
 		);
 		for (const spl of list) {

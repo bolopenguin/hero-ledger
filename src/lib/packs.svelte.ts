@@ -1,6 +1,14 @@
 // Content packs: extra subclasses, feats, species and backgrounds loaded from a JSON file.
 // They live in the user's browser and travel inside the files they export.
-import type { Ab, BackgroundDef, FeatDef, Feature, SpeciesDef, SpellDef } from './types';
+import type {
+	Ab,
+	BackgroundDef,
+	FeatDef,
+	Feature,
+	OptionList,
+	SpeciesDef,
+	SpellDef
+} from './types';
 
 export interface PackSubclass {
 	id: string;
@@ -26,6 +34,7 @@ export interface ContentPack {
 	species?: Record<string, SpeciesDef>;
 	backgrounds?: Record<string, BackgroundDef>;
 	spells?: SpellDef[];
+	options?: Record<string, OptionList>;
 }
 
 const KEY = 'hero-ledger:packs';
@@ -43,6 +52,28 @@ export const packs = $state<{ list: ContentPack[] }>({ list: [] });
 
 export function initPacks() {
 	packs.list = load();
+}
+
+/** On the local dev server, install the packs found in content-packs/local/ (newest wins). */
+export async function loadDevPacks(): Promise<number> {
+	if (!import.meta.env.DEV) return 0;
+	try {
+		const res = await fetch('/__local-packs.json', { cache: 'no-store' });
+		if (!res.ok) return 0;
+		const list = (await res.json()) as unknown[];
+		let n = 0;
+		for (const p of list) {
+			try {
+				installPack(validatePack(p));
+				n++;
+			} catch {
+				/* skip broken pack */
+			}
+		}
+		return n;
+	} catch {
+		return 0;
+	}
 }
 
 function save() {
@@ -107,6 +138,16 @@ export function allPackSpecies(): Record<string, SpeciesDef> {
 	const out: Record<string, SpeciesDef> = {};
 	for (const p of packs.list)
 		for (const [k, s] of Object.entries(p.species ?? {})) out[`pack:${p.id}:${k}`] = s;
+	return out;
+}
+
+/** Option lists (invocations, metamagic, maneuvers…) merged across packs. */
+export function allPackOptions(): Record<string, OptionList> {
+	const out: Record<string, OptionList> = {};
+	for (const p of packs.list)
+		for (const [k, l] of Object.entries(p.options ?? {})) {
+			out[k] = out[k] ? { label: out[k].label, items: { ...out[k].items, ...l.items } } : l;
+		}
 	return out;
 }
 
