@@ -1201,30 +1201,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dnd-character-sheet@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "dnd-character-sheet@workspace:."
-  dependencies:
-    "@sveltejs/adapter-static": "npm:^3.0.8"
-    "@sveltejs/kit": "npm:^2.16.0"
-    "@sveltejs/vite-plugin-svelte": "npm:^5.0.0"
-    "@tailwindcss/vite": "npm:^4.0.0"
-    "@types/node": "npm:^22"
-    daisyui: "npm:^5.0.9"
-    lucide-svelte: "npm:^0.511.0"
-    pdf-lib: "npm:^1.17.1"
-    prettier: "npm:^3.4.2"
-    prettier-plugin-svelte: "npm:^3.3.3"
-    prettier-plugin-tailwindcss: "npm:^0.6.11"
-    svelte: "npm:^5.0.0"
-    svelte-check: "npm:^4.0.0"
-    tailwindcss: "npm:^4.0.0"
-    typescript: "npm:^5.0.0"
-    vite: "npm:^6.0.0"
-    vitest: "npm:^3.0.0"
-  languageName: unknown
-  linkType: soft
-
 "enhanced-resolve@npm:^5.24.5":
   version: 5.26.1
   resolution: "enhanced-resolve@npm:5.26.1"
@@ -1508,6 +1484,30 @@ __metadata:
   checksum: 10c0/386d011a553e02bc594ac2ca0bd6d9e4c22d7fa8cfbfc448a6d148c59ea881b092db9dbe3547ae4b88e55f1b01f7c4a2ecc53b310c042793e63aa44cf6c257f2
   languageName: node
   linkType: hard
+
+"hero-ledger@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "hero-ledger@workspace:."
+  dependencies:
+    "@sveltejs/adapter-static": "npm:^3.0.8"
+    "@sveltejs/kit": "npm:^2.16.0"
+    "@sveltejs/vite-plugin-svelte": "npm:^5.0.0"
+    "@tailwindcss/vite": "npm:^4.0.0"
+    "@types/node": "npm:^22"
+    daisyui: "npm:^5.0.9"
+    lucide-svelte: "npm:^0.511.0"
+    pdf-lib: "npm:^1.17.1"
+    prettier: "npm:^3.4.2"
+    prettier-plugin-svelte: "npm:^3.3.3"
+    prettier-plugin-tailwindcss: "npm:^0.6.11"
+    svelte: "npm:^5.0.0"
+    svelte-check: "npm:^4.0.0"
+    tailwindcss: "npm:^4.0.0"
+    typescript: "npm:^5.0.0"
+    vite: "npm:^6.0.0"
+    vitest: "npm:^3.0.0"
+  languageName: unknown
+  linkType: soft
 
 "is-reference@npm:^3.0.3":
   version: 3.0.3
