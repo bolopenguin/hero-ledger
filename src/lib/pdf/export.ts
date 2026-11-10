@@ -25,6 +25,7 @@ import {
 } from '../calc';
 import { availableStates, grantedSpells, SPELL_KIND_LABEL, stateCtx } from '../calc';
 import { classStats } from '../classStats';
+import { advantages, advForSave, advForSkill, advLabel, advMarker } from '../advantage';
 import { turnSummary, TURN_HINT, TURN_LABEL, type TurnSlot } from '../turn';
 import { allPackOptions, allPackSpells } from '../packs.svelte';
 import { fillTemplate } from '../formula';
@@ -291,6 +292,11 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	const sc = scores(ch);
 	const c = makeCtx(ch, sc);
 	const s0 = spellcasting(ch, sc);
+	const adv = advantages(ch);
+	const GOOD = rgb(0.13, 0.45, 0.25);
+	const markText = (m: ReturnType<typeof advMarker>, x: number, y: number) => {
+		if (m) w.text(m.text, x, y, 6.5, w.b, m.mode === 'dis' ? ACCENT : GOOD);
+	};
 	const cls = getClass(ch);
 	const sp = getSpecies(ch);
 	const bg = getBackground(ch);
@@ -338,6 +344,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text(`score ${sc[ab].total}`, colA + 54, y - 32, 7.5, w.f, MUTED);
 		w.check(['saveProf', ab], sv[ab].prof, colA + 6, y - h + 7, 7);
 		w.text(`Save ${signed(sv[ab].value)}`, colA + 17, y - h + 8, 8.5, w.b);
+		markText(advMarker(advForSave(adv, ab)), colA + 62, y - h + 8);
 		y -= h + 5;
 	}
 
@@ -363,6 +370,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			w.page.drawCircle({ x: cx, y: ys + 3, size: 5, borderColor: ACCENT, borderWidth: 0.8 });
 		w.text(signed(v.value), colS + 18, ys, 8.5, w.b);
 		w.text(s.name, colS + 38, ys, 8.5);
+		markText(advMarker(advForSkill(adv, id)), colS + 40 + w.width(s.name, 8.5), ys);
 		w.text(s.ab.toUpperCase(), colS + skW - 22, ys, 6.5, w.f, MUTED);
 		ys -= 21.2;
 	}
@@ -386,6 +394,8 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.box(x, yy - 41, sw, 41);
 		w.label(l, x + 5, yy - 10);
 		w.center(v, x + sw / 2, yy - 32, v.length > 6 ? 11 : 16, w.b);
+		if (l === 'Initiative')
+			markText(advMarker(adv.filter((e) => e.target === 'init')), x + sw - 30, yy - 10);
 	});
 	yr -= 97;
 	if (ac.parts.length) {
@@ -472,6 +482,27 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			w.text(t, colR, yr - 7, 7.5);
 			yr -= 9.5;
 		}
+	// Advantage & disadvantage: everything in one place, with the conditions spelled out.
+	yr -= 4;
+	w.label('Advantage & disadvantage', colR, yr - 8);
+	yr -= 12;
+	for (const e of adv) {
+		const line = `${e.mode === 'adv' ? 'ADV' : 'DIS'} ${advLabel(e.target)}${e.cond ? ` ${e.cond}` : ''} (${e.source})`;
+		for (const t of w.wrap(line, rW, 7)) {
+			w.text(t, colR, yr - 7, 7, w.f, e.mode === 'dis' ? ACCENT : INK);
+			yr -= 9;
+		}
+	}
+	// Room to add more by hand.
+	for (let k = 0; k < 2; k++) {
+		w.page.drawLine({
+			start: { x: colR, y: yr - 9 },
+			end: { x: colR + rW, y: yr - 9 },
+			thickness: 0.4,
+			color: RULE
+		});
+		yr -= 11;
+	}
 
 	// Attacks (flow below the columns)
 	w.y = Math.min(y, ys, yr) - 6;

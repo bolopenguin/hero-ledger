@@ -22,6 +22,8 @@
 	import { allPackBackgrounds, allPackSpecies, packSubclasses } from '$lib/packs.svelte';
 	import { ABILITIES, type Ab } from '$lib/types';
 	import Stat from './Stat.svelte';
+	import { ADV_TARGETS, advForSave, advForSkill, advLabel, advMarker, advantages, describe } from '$lib/advantage';
+	import { uid } from '$lib/store.svelte';
 	import RightNow from './RightNow.svelte';
 
 	const ch = $derived(currentChar());
@@ -38,6 +40,16 @@
 	const pSpecies = $derived(allPackSpecies());
 	const pBgs = $derived(allPackBackgrounds());
 	const pp = $derived(10 + (sk.perception?.value ?? 0) + (ch.bonus.pp ?? 0));
+	// Advantage and disadvantage, shown next to each roll and listed under the skills.
+	const adv = $derived(advantages(ch));
+	const initAdv = $derived(advMarker(adv.filter((e) => e.target === 'init')));
+	const saveMk = $derived(Object.fromEntries(ABILITIES.map((ab) => [ab, advMarker(advForSave(adv, ab))])));
+	const skillMk = $derived(Object.fromEntries(Object.keys(SKILLS).map((id) => [id, advMarker(advForSkill(adv, id))])));
+	let newAdv = $state({ target: 'stealth', mode: 'adv' as 'adv' | 'dis', cond: '' });
+	function addAdv() {
+		ch.advCustom = [...(ch.advCustom ?? []), { id: uid(), ...newAdv }];
+		newAdv = { target: newAdv.target, mode: 'adv', cond: '' };
+	}
 
 	// Cycle what the player sees: none -> proficient -> expertise. Background skills are
 	// always at least proficient, so for them the click toggles expertise on and off.
@@ -200,6 +212,7 @@
 					<label class="mt-1 flex items-center gap-1.5 text-sm">
 						<input type="checkbox" class="checkbox checkbox-xs checkbox-primary" checked={sv[ab].prof} disabled={sv[ab].auto} title={sv[ab].auto ? 'From your class' : 'Proficient'} onchange={(e) => (ch.saveProf[ab] = e.currentTarget.checked)} />
 						Save <span class="num font-semibold">{signed(sv[ab].value)}</span>
+						{#if saveMk[ab]}<span class="text-[0.65rem] font-bold {saveMk[ab]?.mode === 'dis' ? 'text-error' : 'text-success'}" title={advForSave(adv, ab).map(describe).join('\n')}>{saveMk[ab]?.text}</span>{/if}
 					</label>
 				</div>
 			{/each}
@@ -223,6 +236,7 @@
 					{#if v.fromBg}<span class="text-secondary text-[0.65rem]" title="From background">BG</span>{/if}
 					{#if v.fromChoice}<span class="text-accent text-[0.65rem]" title="Expertise chosen in the Class tab">CLASS</span>{/if}
 					{#if v.extra.length}<span class="text-accent text-[0.65rem]" title={v.extra.join(', ')}>+</span>{/if}
+					{#if skillMk[id]}<span class="text-[0.65rem] font-bold {skillMk[id]?.mode === 'dis' ? 'text-error' : 'text-success'}" title={advForSkill(adv, id).map(describe).join('\n')}>{skillMk[id]?.text}</span>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -234,6 +248,32 @@
 		<p class="text-base-content/55 mt-1 text-xs">
 			Class skills: choose {cls?.skills.n ?? 0}{cls?.skills.list === 'any' ? ' (any)' : ` from ${(cls?.skills.list as string[] | undefined)?.map((x) => SKILLS[x]?.name).join(', ')}`}.
 		</p>
+		<div class="border-base-300 mt-3 border-t pt-2">
+			<h3 class="label-xs">Advantage & disadvantage</h3>
+			{#if adv.length}
+				<ul class="mt-1 flex flex-col gap-0.5 text-sm">
+					{#each adv as e, i (i)}
+						<li class="flex items-baseline gap-2">
+							<span class="w-8 shrink-0 text-[0.65rem] font-bold {e.mode === 'dis' ? 'text-error' : 'text-success'}">{e.mode.toUpperCase()}</span>
+							<span><b>{advLabel(e.target)}</b>{e.cond ? ` ${e.cond}` : ''} <span class="text-base-content/55 text-xs">· {e.source}{e.on ? ' (on now)' : ''}</span></span>
+							{#if e.source === 'Your note'}
+								<button type="button" class="btn btn-ghost btn-xs ml-auto" aria-label="Remove" onclick={() => (ch.advCustom = ch.advCustom.filter((c) => !(c.target === e.target && c.mode === e.mode && (c.cond || undefined) === e.cond)))}>×</button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				<p class="text-base-content/50 mt-1 text-xs">ADV/DIS = always; adv*/dis* next to a roll = only in that situation. Hover a marker to see why.</p>
+			{:else}
+				<p class="text-base-content/55 text-xs">Nothing from your class, species or feats.</p>
+			{/if}
+			<div class="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
+				<span class="text-base-content/60 text-xs">Add your own:</span>
+				<select class="select select-xs" bind:value={newAdv.mode} aria-label="Advantage or disadvantage"><option value="adv">Advantage</option><option value="dis">Disadvantage</option></select>
+				<select class="select select-xs" bind:value={newAdv.target} aria-label="On which roll">{#each ADV_TARGETS as t (t)}<option value={t}>{advLabel(t)}</option>{/each}</select>
+				<input class="input input-xs min-w-0 flex-1" placeholder="when (optional), e.g. in dim light" bind:value={newAdv.cond} />
+				<button type="button" class="btn btn-xs" onclick={addAdv}>Add</button>
+			</div>
+		</div>
 	</section>
 
 	<div class="flex flex-col gap-3">
@@ -242,7 +282,10 @@
 			<h2 id="combat-h" class="panel-title">In combat</h2>
 			<div class="grid grid-cols-3 gap-y-3 sm:grid-cols-6">
 				<Stat label="Armor Class" value={ac.value} key="ac" parts={ac.parts} />
-				<Stat label="Initiative" value={initiative(ch, sc)} key="init" sign />
+				<div class="flex flex-col items-center">
+					<Stat label="Initiative" value={initiative(ch, sc)} key="init" sign />
+					{#if initAdv}<span class="text-[0.65rem] font-bold {initAdv.mode === 'dis' ? 'text-error' : 'text-success'}" title={adv.filter((e) => e.target === 'init').map(describe).join('\n')}>{initAdv.text}</span>{/if}
+				</div>
 				<Stat label="Speed" value={speed(ch)} key="speed" suffix=" ft" />
 				<Stat label="Prof. bonus" value={c.pb} key="pb" sign />
 				<Stat label="Passive Perc." value={pp} key="pp" />

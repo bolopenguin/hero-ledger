@@ -45,6 +45,7 @@ export function blankCharacter(): Character {
 		picks: {},
 		choices: {},
 		active: {},
+		advCustom: [],
 		edits: {},
 		features: [],
 		used: {},

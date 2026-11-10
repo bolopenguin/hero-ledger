@@ -27,6 +27,7 @@ import { readEmbedded, readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
 import { attacksPerAction, classStats } from './classStats';
 import { turnSummary } from './turn';
+import { advantages, advForSave, advForSkill, advMarker } from './advantage';
 import { CLASS_STARTING, GEAR_BY_NAME, parseBackgroundEquipment } from './data/equipment';
 
 describe('formulas and dice', () => {
@@ -471,5 +472,26 @@ describe('turn summary follows switches', () => {
 		expect(turnSummary(ch).action[0].lines?.[0]).toBe(
 			'Greataxe: +6 to hit, 1d12 + 5 Slashing (with Rage)'
 		);
+	});
+});
+
+describe('advantage and disadvantage', () => {
+	it('collects sources and marks skills and saves', () => {
+		const ch = blankCharacter();
+		ch.classId = 'barbarian';
+		ch.level = 7;
+		ch.speciesId = 'gnome';
+		ch.gear.armor = 'scale';
+		const adv = advantages(ch);
+		expect(advMarker(advForSave(adv, 'wis'))?.text).toBe('ADV'); // Gnomish Cunning
+		expect(advMarker(advForSave(adv, 'dex'))?.text).toBe('adv*'); // Danger Sense, conditional
+		expect(advMarker(advForSkill(adv, 'stealth'))?.text).toBe('DIS'); // Scale Mail
+		expect(advMarker(advForSkill(adv, 'athletics'))?.text).toBe('adv*'); // Rage switch off
+		ch.active = { rage: true };
+		expect(advMarker(advForSkill(advantages(ch), 'athletics'))?.text).toBe('ADV');
+		ch.active = { unarmored: true };
+		expect(advForSkill(advantages(ch), 'stealth').some((e) => e.mode === 'dis')).toBe(false);
+		ch.advCustom = [{ id: 'x', target: 'perception', mode: 'adv', cond: '' }];
+		expect(advMarker(advForSkill(advantages(ch), 'perception'))?.text).toBe('ADV');
 	});
 });

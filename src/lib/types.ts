@@ -332,6 +332,8 @@ export interface Character {
 	choices: Record<string, string[]>;
 	/** Situational switches that are on right now (raging, unarmored, Hunter's Mark…). */
 	active: Record<string, boolean>;
+	/** Advantage or disadvantage the player adds by hand (items, house rules). */
+	advCustom: { id: string; target: string; mode: 'adv' | 'dis'; cond: string }[];
 	edits: Record<string, FeatureEdit>;
 	features: CustomFeature[];
 	used: Record<string, number>;
