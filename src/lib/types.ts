@@ -30,12 +30,35 @@ export interface Feature {
 	/** Spells this feature always prepares, by the level they arrive at. */
 	spells?: SpellGrant[];
 	/** Lets the player pick entries from a named option list (invocations, metamagic…). */
-	choose?: { list: string; count: ((c: Ctx) => number) | string };
+	choose?: { list: string; count: ((c: Ctx) => number) | string; grant?: SpellKind };
 }
+
+/**
+ * How a feature makes a spell available:
+ * prepared = always prepared; free = always prepared and castable once per rest without a slot;
+ * atwill = castable without a slot, no limit; ritual = castable only as a Ritual.
+ * Cantrips are always "known", whatever the kind says.
+ */
+export type SpellKind = 'prepared' | 'free' | 'atwill' | 'ritual';
 
 export interface SpellGrant {
 	l: number;
 	names: string[];
+	kind?: SpellKind;
+}
+
+/** What choosing an option changes on the sheet. */
+export interface OptionEffects {
+	armor?: string[];
+	weapons?: string;
+	cantrips?: number;
+	/** Skill id -> ability whose modifier (min +1) is added to that skill. */
+	skillBonus?: Record<string, Ab>;
+	rider?: Omit<Rider, 'id' | 'auto'>;
+	/** Skill id that gains Expertise. */
+	expertise?: string;
+	/** Weapon key whose mastery you can use. */
+	mastery?: string;
 }
 
 export interface OptionItem {
@@ -46,6 +69,10 @@ export interface OptionItem {
 	prereq?: string;
 	repeatable?: boolean;
 	spells?: string[];
+	spellKind?: SpellKind;
+	/** Spells by the level they arrive at (e.g. Circle of the Land). */
+	spellGrants?: SpellGrant[];
+	effects?: OptionEffects;
 }
 
 export interface OptionList {
@@ -111,6 +138,8 @@ export interface FeatDef {
 	/** The ability raised by this feat also gains saving throw proficiency (Resilient). */
 	saveFromAsi?: boolean;
 	spells?: SpellGrant[];
+	/** Only offered to this class (e.g. Blessed Warrior for Paladins). */
+	forClass?: string;
 }
 
 export interface WeaponDef {

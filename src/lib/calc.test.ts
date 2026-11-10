@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib';
 import {
+	allOptions,
 	armorClass,
+	extraTraining,
+	masteredWeapons,
 	attack,
 	autoRiders,
 	features,
@@ -21,6 +24,8 @@ import { blankCharacter, newAttack, sampleCharacter } from './store.svelte';
 import { buildPdf } from './pdf/export';
 import { readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
+import { attacksPerAction, classStats } from './classStats';
+import { CLASS_STARTING, GEAR_BY_NAME, parseBackgroundEquipment } from './data/equipment';
 
 describe('formulas and dice', () => {
 	const c = { l: 5, pb: 3, m: (ab: string) => (ab === 'wis' ? 2 : 0) } as Parameters<
@@ -219,5 +224,126 @@ describe('always-prepared spells, feat effects and option choices', () => {
 		w.choices[inv.key] = ['mask'];
 		expect(grantedSpells(w).map((g) => g.name)).toContain('Disguise Self');
 		removePack('test-pack');
+	});
+});
+
+describe('class choices with real effects', () => {
+	it('Divine Order, Blessed Strikes and Expertise change the sheet', () => {
+		const ch = blankCharacter();
+		ch.classId = 'cleric';
+		ch.level = 7;
+		ch.abilities.wis = 16;
+		const order = features(ch).find((f) => f.n === 'Divine Order')!;
+		ch.choices[order.key] = ['thaumaturge'];
+		expect(spellcasting(ch).cantrips).toBe(5); // 4 at level 7, +1 Thaumaturge
+		expect(skills(ch).religion.value).toBe(1 + 3); // Int +1 (12) + Wis mod 3
+		ch.choices[order.key] = ['protector'];
+		expect(extraTraining(ch).armor).toContain('heavy');
+		const strikes = features(ch).find((f) => f.n === 'Blessed Strikes')!;
+		expect(autoRiders(ch).some((r) => r.name === 'Divine Strike')).toBe(false);
+		ch.choices[strikes.key] = ['divine-strike'];
+		expect(autoRiders(ch).find((r) => r.name === 'Divine Strike')?.dmg).toBe('1d8');
+
+		const rogue = blankCharacter();
+		rogue.classId = 'rogue';
+		const exp = features(rogue).find((f) => f.n === 'Expertise')!;
+		rogue.choices[exp.key] = ['stealth'];
+		expect(skills(rogue).stealth.prof).toBe(2);
+	});
+
+	it('Weapon Mastery is limited by class and gates attack masteries', () => {
+		const ch = blankCharacter();
+		ch.classId = 'barbarian';
+		const wm = features(ch).find((f) => f.n === 'Weapon Mastery')!;
+		expect(wm.choose?.count).toBe(2);
+		const list = allOptions(ch)['weapon-mastery'].items;
+		expect(list.greataxe).toBeTruthy();
+		expect(list.longbow).toBeUndefined(); // Barbarians master melee weapons only
+		ch.choices[wm.key] = ['greataxe'];
+		expect(masteredWeapons(ch).has('greataxe')).toBe(true);
+		expect(masteredWeapons(ch).has('longsword')).toBe(false);
+	});
+
+	it('Circle of the Land and Mystic Arcanum give the right spells', () => {
+		const d = blankCharacter();
+		d.classId = 'druid';
+		d.subclassId = 'srd';
+		d.level = 5;
+		const land = features(d).find((f) => f.n === 'Circle of the Land Spells')!;
+		d.choices[land.key] = ['polar'];
+		const names = grantedSpells(d).map((g) => g.name);
+		expect(names).toEqual(
+			expect.arrayContaining(['Fog Cloud', 'Hold Person', 'Ray of Frost', 'Sleet Storm'])
+		);
+		expect(names).not.toContain('Ice Storm');
+
+		installPack({
+			id: 'arc',
+			name: 'arc',
+			spells: [
+				{
+					name: 'Circle of Death',
+					level: 6,
+					school: 'Necromancy',
+					time: 'Action',
+					range: '150 feet',
+					comp: 'V, S, M',
+					duration: 'Instantaneous',
+					conc: false,
+					ritual: false,
+					classes: ['Warlock', 'Wizard'],
+					d: 'x'
+				}
+			]
+		});
+		const w = blankCharacter();
+		w.classId = 'warlock';
+		w.level = 11;
+		const arc = features(w).find((f) => f.n === 'Mystic Arcanum (level 6 spell)')!;
+		w.choices[arc.key] = ['circle-of-death'];
+		expect(grantedSpells(w).find((g) => g.name === 'Circle of Death')?.kind).toBe('free');
+		removePack('arc');
+	});
+
+	it('lineage level 3+ spells are free once per rest', () => {
+		const t = blankCharacter();
+		t.speciesId = 'tiefling';
+		t.lineage = 'infernal';
+		t.level = 5;
+		const g = grantedSpells(t);
+		expect(g.find((x) => x.name === 'Hellish Rebuke')?.kind).toBe('free');
+		expect(g.find((x) => x.name === 'Fire Bolt')?.kind).toBe('prepared');
+	});
+});
+
+describe('class tab and equipment', () => {
+	it('builds key numbers for every class at every level', () => {
+		for (const id of Object.keys(CLASSES))
+			for (let l = 1; l <= 20; l++) {
+				const ch = blankCharacter();
+				ch.classId = id;
+				ch.subclassId = l >= 3 ? 'srd' : '';
+				ch.level = l;
+				const st = classStats(ch);
+				for (const s of st) expect(s.value).not.toMatch(/undefined|NaN/);
+				expect(attacksPerAction(ch)).toBeGreaterThan(0);
+			}
+	});
+	it('parses background equipment and every class option uses known items', () => {
+		const o = parseBackgroundEquipment(
+			"2 Daggers, Thieves' Tools, Parchment (8 sheets), 20 Arrows, 16 GP — or 50 GP"
+		);
+		expect(o[0].items).toEqual([
+			['Dagger', 2],
+			["Thieves' Tools", 1],
+			['Parchment', 8],
+			['Arrows', 1]
+		]);
+		expect(o[0].gp).toBe(16);
+		expect(o[1].gp).toBe(50);
+		const unknown = Object.values(CLASS_STARTING)
+			.flatMap((opts) => opts.flatMap((op) => op.items.map(([n]) => n)))
+			.filter((n) => !GEAR_BY_NAME.has(n.toLowerCase()) && !/your|occult/i.test(n));
+		expect(unknown).toEqual([]);
 	});
 });

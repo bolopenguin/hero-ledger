@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronDown, ChevronUp, Copy, Plus, Trash2, Swords, Info } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { attack, autoRiders, features, scores, signed } from '$lib/calc';
+	import { attack, autoRiders, features, masteredWeapons, scores, signed } from '$lib/calc';
 	import { AB_NAMES, ACTION_LABELS, MASTERIES, WEAPONS } from '$lib/data/srd';
 	import { newAttack, uid } from '$lib/store.svelte';
 	import { ABILITIES, type Attack, type Rider } from '$lib/types';
@@ -10,6 +10,7 @@
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
 	const auto = $derived(autoRiders(ch, sc));
+	const mastered = $derived(masteredWeapons(ch));
 	const feats = $derived(features(ch).filter((f) => !f.hidden));
 	let open = $state<Record<string, boolean>>({});
 
@@ -89,7 +90,7 @@
 							<span class="num text-sm">{r.base}</span>
 							<span class="text-base-content/60 text-sm">{a.type}</span>
 						</button>
-						{#if a.mastery}<span class="tag" title={MASTERIES[a.mastery] ?? ''}>{a.mastery}</span>{/if}
+						{#if a.mastery}<span class="tag {mastered.has(a.weapon) ? '' : 'line-through opacity-60'}" title={mastered.has(a.weapon) ? (MASTERIES[a.mastery] ?? '') : 'You can use this mastery only if you pick this weapon in Weapon Mastery (Class tab)'}>{a.mastery}</span>{/if}
 						{#if a.range}<span class="text-base-content/60 text-xs">{a.range}</span>{/if}
 						<button type="button" class="btn btn-ghost btn-xs btn-square" title="Edit" onclick={() => (open[a.id] = !open[a.id])}>
 							{#if open[a.id]}<ChevronUp class="size-4" />{:else}<ChevronDown class="size-4" />{/if}
@@ -124,7 +125,7 @@
 							<span class="text-base-content/60">crit{r.critOn < 20 ? ` on ${r.critOn}–20` : ''}: <span class="num">{r.crit}</span></span>
 						</p>
 						{#if a.notes}<p class="text-base-content/70 mt-1 text-sm">{a.notes}</p>{/if}
-						{#if a.mastery && MASTERIES[a.mastery]}<p class="text-base-content/60 mt-1 text-xs"><b>{a.mastery}:</b> {MASTERIES[a.mastery]}</p>{/if}
+						{#if a.mastery && MASTERIES[a.mastery] && mastered.has(a.weapon)}<p class="text-base-content/60 mt-1 text-xs"><b>{a.mastery}:</b> {MASTERIES[a.mastery]}</p>{/if}
 						{#if r.error}<p class="text-error mt-1 text-xs">{r.error}. Write dice like 1d8, 2d6+1 or {'{pb}'}.</p>{/if}
 					</div>
 

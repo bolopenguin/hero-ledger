@@ -133,8 +133,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'drow',
 				spells: [
 					{ l: 1, names: ['Dancing Lights'] },
-					{ l: 3, names: ['Faerie Fire'] },
-					{ l: 5, names: ['Darkness'] }
+					{ l: 3, names: ['Faerie Fire'], kind: 'free' },
+					{ l: 5, names: ['Darkness'], kind: 'free' }
 				],
 				name: 'Drow',
 				d: 'Darkvision 120 ft; Dancing Lights cantrip. Level 3: Faerie Fire. Level 5: Darkness.'
@@ -143,8 +143,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'high',
 				spells: [
 					{ l: 1, names: ['Prestidigitation'] },
-					{ l: 3, names: ['Detect Magic'] },
-					{ l: 5, names: ['Misty Step'] }
+					{ l: 3, names: ['Detect Magic'], kind: 'free' },
+					{ l: 5, names: ['Misty Step'], kind: 'free' }
 				],
 				name: 'High Elf',
 				d: 'Prestidigitation cantrip (swap on a Long Rest for another Wizard cantrip). Level 3: Detect Magic. Level 5: Misty Step.'
@@ -153,8 +153,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'wood',
 				spells: [
 					{ l: 1, names: ['Druidcraft'] },
-					{ l: 3, names: ['Longstrider'] },
-					{ l: 5, names: ['Pass without Trace'] }
+					{ l: 3, names: ['Longstrider'], kind: 'free' },
+					{ l: 5, names: ['Pass without Trace'], kind: 'free' }
 				],
 				name: 'Wood Elf',
 				d: 'Speed 35 ft; Druidcraft cantrip. Level 3: Longstrider. Level 5: Pass without Trace.'
@@ -374,8 +374,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'abyssal',
 				spells: [
 					{ l: 1, names: ['Poison Spray'] },
-					{ l: 3, names: ['Ray of Sickness'] },
-					{ l: 5, names: ['Hold Person'] }
+					{ l: 3, names: ['Ray of Sickness'], kind: 'free' },
+					{ l: 5, names: ['Hold Person'], kind: 'free' }
 				],
 				name: 'Abyssal',
 				d: 'Resistance to Poison; Poison Spray cantrip. Level 3: Ray of Sickness. Level 5: Hold Person.'
@@ -384,8 +384,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'chthonic',
 				spells: [
 					{ l: 1, names: ['Chill Touch'] },
-					{ l: 3, names: ['False Life'] },
-					{ l: 5, names: ['Ray of Enfeeblement'] }
+					{ l: 3, names: ['False Life'], kind: 'free' },
+					{ l: 5, names: ['Ray of Enfeeblement'], kind: 'free' }
 				],
 				name: 'Chthonic',
 				d: 'Resistance to Necrotic; Chill Touch cantrip. Level 3: False Life. Level 5: Ray of Enfeeblement.'
@@ -394,8 +394,8 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				id: 'infernal',
 				spells: [
 					{ l: 1, names: ['Fire Bolt'] },
-					{ l: 3, names: ['Hellish Rebuke'] },
-					{ l: 5, names: ['Darkness'] }
+					{ l: 3, names: ['Hellish Rebuke'], kind: 'free' },
+					{ l: 5, names: ['Darkness'], kind: 'free' }
 				],
 				name: 'Infernal',
 				d: 'Resistance to Fire; Fire Bolt cantrip. Level 3: Hellish Rebuke. Level 5: Darkness.'
@@ -510,6 +510,18 @@ export const FEATS: Record<string, FeatDef> = {
 		name: 'Great Weapon Fighting',
 		cat: 'style',
 		d: 'With a Two-Handed or Versatile melee weapon held in two hands, treat any 1 or 2 on a damage die as a 3.'
+	},
+	'blessed-warrior': {
+		name: 'Blessed Warrior',
+		cat: 'style',
+		forClass: 'paladin',
+		d: 'Instead of a Fighting Style feat: learn two Cleric cantrips (they count as Paladin spells, Charisma). Swap one when you gain a Paladin level.'
+	},
+	'druidic-warrior': {
+		name: 'Druidic Warrior',
+		cat: 'style',
+		forClass: 'ranger',
+		d: 'Instead of a Fighting Style feat: learn two Druid cantrips (they count as Ranger spells, Wisdom). Swap one when you gain a Ranger level.'
 	},
 	twf: {
 		name: 'Two-Weapon Fighting',

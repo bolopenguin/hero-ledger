@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Plus, Trash2, Swords } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { armorClass, attunementMax, carrying, scores } from '$lib/calc';
+	import { armorClass, attunementMax, carrying, getBackground, getClass, scores } from '$lib/calc';
+	import { CLASS_STARTING, GEAR, GEAR_BY_NAME, GEAR_CAT_LABEL, parseBackgroundEquipment, type GearCat, type GearDef, type StartingOption } from '$lib/data/equipment';
 	import { ARMOR, WEAPONS } from '$lib/data/srd';
 	import { newAttack, newItem } from '$lib/store.svelte';
 	import type { Item } from '$lib/types';
@@ -37,6 +38,59 @@
 	function addItem(location: string) {
 		ch.gear.items.push(newItem({ location }));
 	}
+	// ---- Catalog and starting equipment ----
+	let catQuery = $state('');
+	let catFilter = $state<GearCat | ''>('');
+	let showCatalog = $state(false);
+	let addedMsg = $state('');
+	const catalog = $derived(
+		GEAR.filter((g) => (!catFilter || g.cat === catFilter) && (!catQuery.trim() || g.name.toLowerCase().includes(catQuery.trim().toLowerCase())))
+	);
+	const fmtCost = (gp: number) => (gp >= 1 ? `${gp} GP` : gp >= 0.1 ? `${Math.round(gp * 10)} SP` : `${Math.round(gp * 100)} CP`);
+	function pushGear(name: string, qty: number, location: string) {
+		const def = GEAR_BY_NAME.get(name.toLowerCase());
+		const existing = ch.gear.items.find((i) => i.name.toLowerCase() === name.toLowerCase() && i.location === location);
+		if (existing && def && def.cat !== 'weapon' && def.cat !== 'armor') {
+			existing.qty += qty;
+			return;
+		}
+		const worn = def?.cat === 'armor' || def?.cat === 'weapon' || def?.cat === 'focus';
+		ch.gear.items.push(
+			newItem({
+				name,
+				qty,
+				weight: def?.weight ?? 0,
+				value: def?.cost ?? 0,
+				location: worn ? 'Worn' : location,
+				notes: def?.d ?? '',
+				magic: name.startsWith('Potion') || name.startsWith('Spell Scroll'),
+				chargesMax: name === "Healer's Kit" ? 10 : 0,
+				charges: name === "Healer's Kit" ? 10 : 0
+			})
+		);
+	}
+	function addGear(def: GearDef, qty = 1) {
+		if (def.contents) for (const [n, q] of def.contents) pushGear(n, q * qty, 'Backpack');
+		else pushGear(def.name, qty, 'Backpack');
+		addedMsg = `Added ${def.name}${def.contents ? ' (unpacked)' : ''}.`;
+		setTimeout(() => (addedMsg = ''), 2500);
+	}
+	function takeStarting(o: StartingOption, from: string) {
+		for (const [n, q] of o.items) {
+			const def = GEAR_BY_NAME.get(n.toLowerCase());
+			if (def?.contents) for (const [cn, cq] of def.contents) pushGear(cn, cq * q, 'Backpack');
+			else pushGear(n, q, 'Backpack');
+		}
+		ch.gear.coins.gp += o.gp;
+		addedMsg = `${from} option ${o.label} added${o.gp ? ` with ${o.gp} GP` : ''}.`;
+		setTimeout(() => (addedMsg = ''), 3500);
+	}
+	const classStart = $derived(CLASS_STARTING[ch.classId] ?? []);
+	const bgDef = $derived(getBackground(ch));
+	const bgStart = $derived(bgDef?.equipment ? parseBackgroundEquipment(bgDef.equipment) : []);
+	const describe = (o: StartingOption) =>
+		[...o.items.map(([n, q]) => (q > 1 ? `${q} × ${n}` : n)), o.gp ? `${o.gp} GP` : ''].filter(Boolean).join(', ');
+
 	const coinNames = [
 		['cp', 'Copper'],
 		['sp', 'Silver'],
@@ -91,6 +145,59 @@
 			<p class="mt-1 text-sm">Gear value <span class="num">{valueTotal}</span> GP</p>
 		</section>
 	</div>
+
+	{#if classStart.length || bgStart.length}
+		<details class="panel" open={!ch.gear.items.length}>
+			<summary class="panel-title mb-0 cursor-pointer">Starting equipment</summary>
+			<p class="text-base-content/60 mt-1 text-xs">Pick one option from your class and one from your background. Items go to your inventory (packs unpacked), gold to your coins.</p>
+			<div class="mt-2 grid gap-3 md:grid-cols-2">
+				{#each [[getClass(ch)?.name ?? 'Class', classStart], [bgDef?.name ?? 'Background', bgStart]] as [from, opts] (from)}
+					{#if (opts as StartingOption[]).length}
+						<div class="flex flex-col gap-1.5">
+							<span class="label-xs">{from}</span>
+							{#each opts as StartingOption[] as o (o.label)}
+								<button type="button" class="btn btn-sm h-auto justify-start py-1.5 text-left font-normal normal-case" onclick={() => takeStarting(o, from as string)}>
+									<Plus class="size-3.5 shrink-0" /><b>{o.label}</b> <span class="text-base-content/75">{describe(o)}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				{/each}
+			</div>
+		</details>
+	{/if}
+
+	<section class="panel" aria-labelledby="cat-h">
+		<div class="flex flex-wrap items-center gap-2">
+			<h2 id="cat-h" class="panel-title mb-0">Equipment catalog</h2>
+			<span class="text-base-content/60 text-xs">{GEAR.length} items from the rules, with cost, weight and what they do.</span>
+			<button type="button" class="btn btn-sm ml-auto" onclick={() => (showCatalog = !showCatalog)}>{showCatalog ? 'Close' : 'Browse'}</button>
+		</div>
+		{#if addedMsg}<p role="status" class="text-success mt-1 text-xs">{addedMsg}</p>{/if}
+		{#if showCatalog}
+			<div class="mt-2 flex flex-wrap gap-2">
+				<input class="input input-sm min-w-0 flex-1" placeholder="Search equipment…" bind:value={catQuery} aria-label="Search equipment" />
+				<select class="select select-sm" bind:value={catFilter} aria-label="Category">
+					<option value="">All categories</option>
+					{#each Object.entries(GEAR_CAT_LABEL) as [k, v] (k)}<option value={k}>{v}</option>{/each}
+				</select>
+			</div>
+			<ul class="mt-2 flex max-h-96 flex-col overflow-y-auto">
+				{#each catalog as gi (gi.name)}
+					<li>
+						<button type="button" class="hover:bg-base-200 flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-sm" onclick={() => addGear(gi)}>
+							<Plus class="size-3.5 shrink-0 translate-y-0.5" />
+							<span class="font-semibold">{gi.name}</span>
+							<span class="num text-base-content/60 text-xs whitespace-nowrap">{fmtCost(gi.cost)} · {gi.weight} lb</span>
+							<span class="text-base-content/60 truncate text-xs">{gi.contents ? gi.contents.map(([n, q]) => (q > 1 ? `${q} ${n}` : n)).join(', ') : gi.d}</span>
+						</button>
+					</li>
+				{:else}
+					<li class="text-base-content/60 px-2 py-1 text-sm">Nothing matches.</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
 
 	<section class="panel" aria-labelledby="items-h">
 		<div class="mb-2 flex flex-wrap items-center gap-2">

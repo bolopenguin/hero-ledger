@@ -3,6 +3,7 @@
 	import { currentChar } from '$lib/current.svelte';
 	import {
 		armorClass,
+		extraTraining,
 		darkvision,
 		getBackground,
 		getClass,
@@ -75,8 +76,12 @@
 	const exhaustionText = $derived(
 		ch.exhaustion ? `−${2 * ch.exhaustion} to D20 Tests, −${5 * ch.exhaustion} ft Speed${ch.exhaustion >= 6 ? ' — dead' : ''}` : 'No effects'
 	);
+	const training = $derived(extraTraining(ch));
 	const armorTraining = $derived(
-		(cls?.armor ?? []).map((a) => a[0].toUpperCase() + a.slice(1)).join(', ') || 'None'
+		[...(cls?.armor ?? []), ...training.armor]
+			.filter((a, i, arr) => arr.indexOf(a) === i)
+			.map((a) => a[0].toUpperCase() + a.slice(1))
+			.join(', ') || 'None'
 	);
 </script>
 
@@ -239,6 +244,8 @@
 					{#if v.prof === 2}<span class="text-secondary text-[0.65rem] font-semibold" title="Expertise: Proficiency Bonus added twice">EXP</span>{/if}
 					<span class="text-base-content/45 text-[0.65rem] uppercase">{s.ab}</span>
 					{#if v.fromBg}<span class="text-secondary text-[0.65rem]" title="From background">BG</span>{/if}
+					{#if v.fromChoice}<span class="text-accent text-[0.65rem]" title="Expertise chosen in the Class tab">CLASS</span>{/if}
+					{#if v.extra.length}<span class="text-accent text-[0.65rem]" title={v.extra.join(', ')}>+</span>{/if}
 				</li>
 			{/each}
 		</ul>
@@ -336,7 +343,7 @@
 				</dd>
 				<dt class="label-xs pt-1">Weapons</dt>
 				<dd>
-					<span class="text-base-content/70">{cls?.weapons || '—'}</span>
+					<span class="text-base-content/70">{[cls?.weapons, ...training.weapons].filter(Boolean).join(', ') || '—'}</span>
 					<input class="line-input" placeholder="extra weapon training" bind:value={ch.prof.weapons} />
 				</dd>
 				<dt class="label-xs pt-1">Tools</dt>

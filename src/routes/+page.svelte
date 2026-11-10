@@ -17,6 +17,7 @@
 	import { getClass, subclassName } from '$lib/calc';
 	import SheetTab from '$lib/components/SheetTab.svelte';
 	import CombatTab from '$lib/components/CombatTab.svelte';
+	import ClassTab from '$lib/components/ClassTab.svelte';
 	import FeaturesTab from '$lib/components/FeaturesTab.svelte';
 	import SpellsTab from '$lib/components/SpellsTab.svelte';
 	import InventoryTab from '$lib/components/InventoryTab.svelte';
@@ -25,6 +26,7 @@
 	let ready = $state(false);
 	const tabs = [
 		['sheet', 'Sheet'],
+		['class', 'Class'],
 		['combat', 'Combat'],
 		['features', 'Features'],
 		['spells', 'Spells'],
@@ -249,6 +251,7 @@
 
 	<main class="mx-auto max-w-7xl px-4 py-4">
 		{#if tab === 'sheet'}<SheetTab />
+		{:else if tab === 'class'}<ClassTab />
 		{:else if tab === 'combat'}<CombatTab />
 		{:else if tab === 'features'}<FeaturesTab />
 		{:else if tab === 'spells'}<SpellsTab />

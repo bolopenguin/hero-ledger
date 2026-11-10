@@ -1,6 +1,7 @@
 // Derived values: everything the sheet calculates from the character's choices.
 import { by, CLASSES } from './data/classes';
 import { ARMOR, BACKGROUNDS, FEATS, FULL_SLOTS, SKILLS, SPECIES, WEAPONS } from './data/srd';
+import { dynamicOptions, STATIC_OPTIONS } from './data/options';
 import {
 	avgDice,
 	critTerms,
@@ -15,6 +16,7 @@ import {
 	allPackFeats,
 	allPackOptions,
 	allPackSpecies,
+	allPackSpells,
 	findPackSubclass
 } from './packs.svelte';
 import {
@@ -31,8 +33,11 @@ import {
 	type PickKind,
 	type Recharge,
 	type Rider,
+	type OptionItem,
+	type OptionList,
 	type SpeciesDef,
-	type SpellGrant
+	type SpellGrant,
+	type SpellKind
 } from './types';
 
 export const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -220,7 +225,7 @@ export interface RFeature {
 	/** Always-prepared spells this feature gives. */
 	spells?: SpellGrant[];
 	/** Option list the player picks from, and how many. */
-	choose?: { list: string; count: number };
+	choose?: { list: string; count: number; grant?: SpellKind };
 }
 
 function text(t: Feature['d'], c: Ctx) {
@@ -273,7 +278,9 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 			n: e.n ?? f.n,
 			d,
 			spells: f.spells ?? parseGrants(d),
-			choose: f.choose ? { list: f.choose.list, count: Math.max(0, Math.floor(count)) } : undefined,
+			choose: f.choose
+				? { list: f.choose.list, count: Math.max(0, Math.floor(count)), grant: f.choose.grant }
+				: undefined,
 			a: f.a,
 			src,
 			uses: usesOf(f, c),
@@ -446,27 +453,107 @@ export function hasFeat(ch: Character, featKey: string): boolean {
 	return activeFeats(ch).some((f) => f.key === featKey || f.key.endsWith(':' + featKey));
 }
 
+// ---------- Class choices (option lists) ----------
+
+/** Every option list available to this character: built-in, generated, and from packs. */
+export function allOptions(ch: Character): Record<string, OptionList> {
+	return { ...STATIC_OPTIONS, ...dynamicOptions(ch.classId, allPackSpells()), ...allPackOptions() };
+}
+
+export interface ChosenOption {
+	featureKey: string;
+	feature: string;
+	list: string;
+	key: string;
+	item: OptionItem;
+	grant?: SpellKind;
+}
+
+/** Options picked on features the character has, limited to each feature's count and level. */
+export function chosenOptions(ch: Character, feats = features(ch)): ChosenOption[] {
+	const lists = allOptions(ch);
+	const out: ChosenOption[] = [];
+	for (const f of feats) {
+		if (!f.choose || f.hidden) continue;
+		const list = lists[f.choose.list];
+		const picked = (ch.choices[f.key] ?? []).slice(0, f.choose.count);
+		for (const k of picked) {
+			const item = list?.items[k];
+			if (item && (item.l ?? 1) <= ch.level)
+				out.push({
+					featureKey: f.key,
+					feature: f.n,
+					list: f.choose.list,
+					key: k,
+					item,
+					grant: f.choose.grant
+				});
+		}
+	}
+	return out;
+}
+
+/** Combined effects of the chosen options. */
+export function optionEffects(ch: Character) {
+	const fx = {
+		armor: [] as string[],
+		weapons: [] as string[],
+		cantrips: 0,
+		skillBonus: [] as [string, Ab, string][],
+		expertise: new Set<string>(),
+		mastery: new Set<string>(),
+		riders: [] as Rider[]
+	};
+	for (const o of chosenOptions(ch)) {
+		const e = o.item.effects;
+		if (!e) continue;
+		if (e.armor) fx.armor.push(...e.armor);
+		if (e.weapons) fx.weapons.push(e.weapons);
+		fx.cantrips += e.cantrips ?? 0;
+		for (const [sk, ab] of Object.entries(e.skillBonus ?? {}))
+			fx.skillBonus.push([sk, ab, o.item.name]);
+		if (e.expertise) fx.expertise.add(e.expertise);
+		if (e.mastery) fx.mastery.add(e.mastery);
+		if (e.rider) fx.riders.push({ ...e.rider, id: `opt:${o.list}:${o.key}` });
+	}
+	return fx;
+}
+
 export interface GrantedSpell {
 	name: string;
 	source: string;
+	kind: SpellKind;
 }
 
-/** Spells that features, feats, species and chosen options keep always prepared. */
+export const SPELL_KIND_LABEL: Record<SpellKind, string> = {
+	prepared: 'Always prepared',
+	free: 'Prepared, free once per rest',
+	atwill: 'At will, no slot',
+	ritual: 'Ritual only'
+};
+
+/** Spells that features, feats, species and chosen options make available, and how. */
 export function grantedSpells(ch: Character): GrantedSpell[] {
 	const out = new Map<string, GrantedSpell>();
-	const add = (name: string, source: string) => {
+	const rank: Record<SpellKind, number> = { ritual: 0, prepared: 1, free: 2, atwill: 3 };
+	const add = (name: string, source: string, kind: SpellKind = 'prepared') => {
 		const k = name.toLowerCase();
-		if (!out.has(k)) out.set(k, { name, source });
+		const cur = out.get(k);
+		// The most generous way of casting wins (e.g. at will beats always prepared).
+		if (!cur || rank[kind] > rank[cur.kind]) out.set(k, { name, source, kind });
 	};
-	const options = allPackOptions();
-	for (const f of features(ch)) {
+	const feats = features(ch);
+	for (const f of feats) {
 		if (f.hidden) continue;
-		for (const g of f.spells ?? []) if (g.l <= ch.level) for (const n of g.names) add(n, f.n);
-		if (f.choose)
-			for (const k of ch.choices[f.key] ?? []) {
-				const it = options[f.choose.list]?.items[k];
-				if (it && (it.l ?? 1) <= ch.level) for (const n of it.spells ?? []) add(n, it.name);
-			}
+		for (const g of f.spells ?? [])
+			if (g.l <= ch.level) for (const n of g.names) add(n, f.n, g.kind);
+	}
+	for (const o of chosenOptions(ch, feats)) {
+		for (const n of o.item.spells ?? [])
+			add(n, `${o.feature}: ${o.item.name}`, o.item.spellKind ?? o.grant);
+		for (const g of o.item.spellGrants ?? [])
+			if (g.l <= ch.level)
+				for (const n of g.names) add(n, `${o.feature}: ${o.item.name}`, g.kind ?? o.grant);
 	}
 	return [...out.values()];
 }
@@ -499,12 +586,31 @@ export function skills(ch: Character, sc = scores(ch)) {
 	const c = makeCtx(ch, sc);
 	const bg = getBackground(ch);
 	const jack = ch.classId === 'bard' && ch.level >= 2;
-	const out: Record<string, { prof: number; fromBg: boolean; value: number; ab: Ab }> = {};
+	const fx = optionEffects(ch);
+	const out: Record<
+		string,
+		{ prof: number; fromBg: boolean; fromChoice: boolean; value: number; ab: Ab; extra: string[] }
+	> = {};
 	for (const [id, s] of Object.entries(SKILLS)) {
 		const fromBg = !!bg?.skills.includes(id);
-		const prof = Math.max(ch.skills[id] ?? 0, fromBg ? 1 : 0);
-		const add = prof === 2 ? c.pb * 2 : prof === 1 ? c.pb : jack ? Math.floor(c.pb / 2) : 0;
-		out[id] = { prof, fromBg, ab: s.ab, value: ov(ch, `skill.${id}`, c.m(s.ab) + add) };
+		const fromChoice = fx.expertise.has(id);
+		const prof = fromChoice ? 2 : Math.max(ch.skills[id] ?? 0, fromBg ? 1 : 0);
+		let add = prof === 2 ? c.pb * 2 : prof === 1 ? c.pb : jack ? Math.floor(c.pb / 2) : 0;
+		const extra: string[] = [];
+		for (const [sk, ab, from] of fx.skillBonus)
+			if (sk === id) {
+				const b = Math.max(1, c.m(ab));
+				add += b;
+				extra.push(`${from} ${signed(b)}`);
+			}
+		out[id] = {
+			prof,
+			fromBg,
+			fromChoice,
+			ab: s.ab,
+			extra,
+			value: ov(ch, `skill.${id}`, c.m(s.ab) + add)
+		};
 	}
 	return out;
 }
@@ -649,7 +755,7 @@ export function spellcasting(ch: Character, sc = scores(ch)) {
 		atk: ov(ch, 'spellAtk', m + c.pb),
 		slots: [...slots, 0, 0, 0, 0, 0, 0, 0, 0, 0].slice(0, 9),
 		pact,
-		cantrips: src?.cantrips ? by(ch.level, src.cantrips) : null,
+		cantrips: src?.cantrips ? by(ch.level, src.cantrips) + optionEffects(ch).cantrips : null,
 		prepared: src?.prepared ? src.prepared[ch.level - 1] : null
 	};
 }
@@ -740,37 +846,7 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 			applies: 'weapon',
 			when: 'Target is marked'
 		});
-		if (ch.subclassId === 'srd' && l >= 3)
-			add({
-				id: 'auto:colossus',
-				name: 'Colossus Slayer',
-				dmg: '1d8',
-				type: '',
-				hit: 0,
-				applies: 'weapon',
-				when: 'Once per turn, target is missing HP'
-			});
 	}
-	if (ch.classId === 'cleric' && l >= 7)
-		add({
-			id: 'auto:divinestrike',
-			name: 'Divine Strike',
-			dmg: l >= 14 ? '2d8' : '1d8',
-			type: 'Radiant/Necrotic',
-			hit: 0,
-			applies: 'weapon',
-			when: 'Once per turn (if you chose Divine Strike)'
-		});
-	if (ch.classId === 'druid' && l >= 7)
-		add({
-			id: 'auto:primal',
-			name: 'Primal Strike',
-			dmg: l >= 15 ? '2d8' : '1d8',
-			type: 'Elemental',
-			hit: 0,
-			applies: 'weapon',
-			when: 'Once per turn (if you chose Primal Strike)'
-		});
 	if (ch.speciesId === 'goliath' && ch.lineage === 'fire')
 		add({
 			id: 'auto:fireburn',
@@ -801,10 +877,22 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 			applies: 'ranged',
 			when: 'Always with Ranged weapons'
 		});
+	for (const r2 of optionEffects(ch).riders) add({ ...r2, dmg: fillTemplate(r2.dmg, c) });
 	for (const f of activeFeats(ch))
 		if (f.def.rider)
 			add({ ...f.def.rider, id: `feat:${f.key}`, dmg: fillTemplate(f.def.rider.dmg, c) });
 	return r;
+}
+
+/** Weapon kinds whose mastery property the character can use. */
+export function masteredWeapons(ch: Character): Set<string> {
+	return optionEffects(ch).mastery;
+}
+
+/** Armor and weapon training granted by chosen options (e.g. Divine Order: Protector). */
+export function extraTraining(ch: Character) {
+	const fx = optionEffects(ch);
+	return { armor: [...new Set(fx.armor)], weapons: [...new Set(fx.weapons)] };
 }
 
 export function allRiders(ch: Character, sc = scores(ch)): Rider[] {

@@ -78,6 +78,15 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Weapon Mastery',
+				choose: {
+					list: 'weapon-mastery',
+					count: (c) =>
+						by(c.l, [
+							[1, 2],
+							[4, 3],
+							[10, 4]
+						])
+				},
 				a: 'passive',
 				d: (c) =>
 					`Use the mastery property of ${by(c.l, [
@@ -252,6 +261,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 2,
 				n: 'Expertise',
+				choose: { list: 'expertise', count: '2' },
 				a: 'passive',
 				d: 'Gain Expertise in two skills you are proficient in.'
 			},
@@ -280,6 +290,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 9,
 				n: 'Expertise',
+				choose: { list: 'expertise', count: '2' },
 				a: 'passive',
 				d: 'Gain Expertise in two more skills you are proficient in.'
 			},
@@ -365,6 +376,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Divine Order',
+				choose: { list: 'divine-order', count: '1' },
 				a: 'passive',
 				d: 'Choose one. Protector: training with Martial weapons and Heavy armor. Thaumaturge: one extra cantrip, and add your Wis mod (min +1) to Arcana and Religion checks.'
 			},
@@ -403,6 +415,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 7,
 				n: 'Blessed Strikes',
+				choose: { list: 'blessed-strikes', count: '1' },
 				a: 'passive',
 				d: (c) =>
 					`Choose one. Divine Strike: once per turn on a weapon hit, +${c.l >= 14 ? '2d8' : '1d8'} Necrotic or Radiant. Potent Spellcasting: add your Wis mod to Cleric cantrip damage.`
@@ -517,6 +530,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Primal Order',
+				choose: { list: 'primal-order', count: '1' },
 				a: 'passive',
 				d: 'Choose one. Magician: one extra cantrip, add Wis mod (min +1) to Arcana and Nature checks. Warden: training with Martial weapons and Medium armor.'
 			},
@@ -563,6 +577,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 7,
 				n: 'Elemental Fury',
+				choose: { list: 'elemental-fury', count: '1' },
 				a: 'passive',
 				d: (c) =>
 					`Choose one. Potent Spellcasting: add Wis mod to Druid cantrip damage. Primal Strike: once per turn on a weapon or Beast-form hit, +${c.l >= 15 ? '2d8' : '1d8'} Cold, Fire, Lightning or Thunder.`
@@ -598,8 +613,9 @@ export const CLASSES: Record<string, ClassDef> = {
 				{
 					l: 3,
 					n: 'Circle of the Land Spells',
+					choose: { list: 'land-type', count: '1', grant: 'prepared' },
 					a: 'passive',
-					d: 'Choose a land on each Long Rest; its spells are always prepared. Arid: Blur, Burning Hands, Fire Bolt; 5 Fireball; 7 Blight; 9 Wall of Stone. Polar: Fog Cloud, Hold Person, Ray of Frost; Sleet Storm; Ice Storm; Cone of Cold. Temperate: Misty Step, Shocking Grasp, Sleep; Lightning Bolt; Freedom of Movement; Tree Stride. Tropical: Acid Splash, Ray of Sickness, Web; Stinking Cloud; Polymorph; Insect Plague.'
+					d: "After each Long Rest choose a land (change it below); its spells for your level are always prepared, and Nature's Ward uses its resistance."
 				},
 				{
 					l: 3,
@@ -691,6 +707,16 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Weapon Mastery',
+				choose: {
+					list: 'weapon-mastery',
+					count: (c) =>
+						by(c.l, [
+							[1, 3],
+							[4, 4],
+							[10, 5],
+							[16, 6]
+						])
+				},
 				a: 'passive',
 				d: (c) =>
 					`Use the mastery property of ${by(c.l, [
@@ -1032,6 +1058,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Weapon Mastery',
+				choose: { list: 'weapon-mastery', count: '2' },
 				a: 'passive',
 				d: 'Use the mastery property of two kinds of weapons. Change one on a Long Rest.'
 			},
@@ -1045,7 +1072,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 2,
 				n: "Paladin's Smite",
-				spells: [{ l: 2, names: ['Divine Smite'] }],
+				spells: [{ l: 2, names: ['Divine Smite'], kind: 'free' }],
 				a: 'bonus',
 				r: 'long',
 				u: () => 1,
@@ -1065,7 +1092,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 5,
 				n: 'Faithful Steed',
-				spells: [{ l: 5, names: ['Find Steed'] }],
+				spells: [{ l: 5, names: ['Find Steed'], kind: 'free' }],
 				a: 'action',
 				r: 'long',
 				u: () => 1,
@@ -1204,12 +1231,14 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Weapon Mastery',
+				choose: { list: 'weapon-mastery', count: '2' },
 				a: 'passive',
 				d: 'Use the mastery property of two kinds of weapons. Change one on a Long Rest.'
 			},
 			{
 				l: 2,
 				n: 'Deft Explorer',
+				choose: { list: 'expertise', count: '1' },
 				a: 'passive',
 				d: 'Expertise in one skill you are proficient in, and two extra languages.'
 			},
@@ -1234,6 +1263,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 9,
 				n: 'Expertise',
+				choose: { list: 'expertise', count: '2' },
 				a: 'passive',
 				d: 'Expertise in two more skills you are proficient in.'
 			},
@@ -1286,12 +1316,14 @@ export const CLASSES: Record<string, ClassDef> = {
 				{
 					l: 3,
 					n: "Hunter's Prey",
+					choose: { list: 'hunters-prey', count: '1' },
 					a: 'passive',
 					d: 'Choose one (swap on a rest). Colossus Slayer: once per turn, +1d8 on a weapon hit against a creature missing HP. Horde Breaker: once per turn, make another attack with the same weapon against a different creature within 5 ft of the target.'
 				},
 				{
 					l: 7,
 					n: 'Defensive Tactics',
+					choose: { list: 'defensive-tactics', count: '1' },
 					a: 'passive',
 					d: 'Choose one (swap on a rest). Escape the Horde: Opportunity Attacks against you have disadvantage. Multiattack Defense: after a creature hits you, its other attacks this turn have disadvantage.'
 				},
@@ -1335,7 +1367,13 @@ export const CLASSES: Record<string, ClassDef> = {
 		},
 		subLevels: [3, 9, 13, 17],
 		features: [
-			{ l: 1, n: 'Expertise', a: 'passive', d: 'Expertise in two skills you are proficient in.' },
+			{
+				l: 1,
+				n: 'Expertise',
+				a: 'passive',
+				choose: { list: 'expertise', count: '2' },
+				d: 'Expertise in two skills you are proficient in.'
+			},
 			{
 				l: 1,
 				n: 'Sneak Attack',
@@ -1352,6 +1390,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 1,
 				n: 'Weapon Mastery',
+				choose: { list: 'weapon-mastery', count: '2' },
 				a: 'passive',
 				d: 'Use the mastery property of two kinds of weapons. Change one on a Long Rest.'
 			},
@@ -1377,7 +1416,13 @@ export const CLASSES: Record<string, ClassDef> = {
 				a: 'reaction',
 				d: "When an attacker you can see hits you, halve the attack's damage."
 			},
-			{ l: 6, n: 'Expertise', a: 'passive', d: 'Expertise in two more skills.' },
+			{
+				l: 6,
+				n: 'Expertise',
+				a: 'passive',
+				choose: { list: 'expertise', count: '2' },
+				d: 'Expertise in two more skills.'
+			},
 			{
 				l: 7,
 				n: 'Evasion',
@@ -1594,7 +1639,7 @@ export const CLASSES: Record<string, ClassDef> = {
 				{
 					l: 18,
 					n: 'Dragon Companion',
-					spells: [{ l: 18, names: ['Summon Dragon'] }],
+					spells: [{ l: 18, names: ['Summon Dragon'], kind: 'free' }],
 					a: 'action',
 					r: 'long',
 					u: () => 1,
@@ -1691,7 +1736,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 9,
 				n: 'Contact Patron',
-				spells: [{ l: 9, names: ['Contact Other Plane'] }],
+				spells: [{ l: 9, names: ['Contact Other Plane'], kind: 'free' }],
 				a: 'action',
 				r: 'long',
 				u: () => 1,
@@ -1700,15 +1745,43 @@ export const CLASSES: Record<string, ClassDef> = {
 			SUB(10, 'Warlock'),
 			{
 				l: 11,
-				n: 'Mystic Arcanum',
+				n: 'Mystic Arcanum (level 6 spell)',
 				a: 'special',
 				r: 'long',
-				d: (c) =>
-					`Choose one spell each of level ${[6, 7, 8, 9].filter((x, i) => c.l >= [11, 13, 15, 17][i]).join(', ')}. Cast each once per Long Rest without a slot.`
+				u: () => 1,
+				choose: { list: 'spells:warlock:6', count: '1', grant: 'free' },
+				d: 'Choose a level 6 Warlock spell. Cast it once per Long Rest without a spell slot. Swap it when you gain a Warlock level.'
 			},
 			ASI(12),
+			{
+				l: 13,
+				n: 'Mystic Arcanum (level 7 spell)',
+				a: 'special',
+				r: 'long',
+				u: () => 1,
+				choose: { list: 'spells:warlock:7', count: '1', grant: 'free' },
+				d: 'Choose a level 7 Warlock spell. Cast it once per Long Rest without a spell slot. Swap it when you gain a Warlock level.'
+			},
 			SUB(14, 'Warlock'),
+			{
+				l: 15,
+				n: 'Mystic Arcanum (level 8 spell)',
+				a: 'special',
+				r: 'long',
+				u: () => 1,
+				choose: { list: 'spells:warlock:8', count: '1', grant: 'free' },
+				d: 'Choose a level 8 Warlock spell. Cast it once per Long Rest without a spell slot. Swap it when you gain a Warlock level.'
+			},
 			ASI(16),
+			{
+				l: 17,
+				n: 'Mystic Arcanum (level 9 spell)',
+				a: 'special',
+				r: 'long',
+				u: () => 1,
+				choose: { list: 'spells:warlock:9', count: '1', grant: 'free' },
+				d: 'Choose a level 9 Warlock spell. Cast it once per Long Rest without a spell slot. Swap it when you gain a Warlock level.'
+			},
 			BOON,
 			{
 				l: 20,
@@ -1804,6 +1877,7 @@ export const CLASSES: Record<string, ClassDef> = {
 			{
 				l: 2,
 				n: 'Scholar',
+				choose: { list: 'scholar', count: '1' },
 				a: 'passive',
 				d: 'Expertise in one of Arcana, History, Investigation, Medicine, Nature or Religion (must be proficient).'
 			},
@@ -1825,13 +1899,22 @@ export const CLASSES: Record<string, ClassDef> = {
 				l: 18,
 				n: 'Spell Mastery',
 				a: 'passive',
-				d: 'Choose one level 1 and one level 2 spell that take an action. Cast them at their lowest level without a slot. Swap them on a Long Rest.'
+				choose: { list: 'spells:wizard:1', count: '1', grant: 'atwill' },
+				d: 'Choose a level 1 spell in your spellbook that takes an action: cast it at level 1 without a slot. Swap it on a Long Rest.'
+			},
+			{
+				l: 18,
+				n: 'Spell Mastery (level 2 spell)',
+				a: 'passive',
+				choose: { list: 'spells:wizard:2', count: '1', grant: 'atwill' },
+				d: 'Choose a level 2 spell in your spellbook that takes an action: cast it at level 2 without a slot. Swap it on a Long Rest.'
 			},
 			BOON,
 			{
 				l: 20,
 				n: 'Signature Spells',
 				a: 'special',
+				choose: { list: 'spells:wizard:3', count: '2', grant: 'free' },
 				r: 'short',
 				u: () => 2,
 				d: 'Two level 3 spells are always prepared. Cast each once at level 3 without a slot per Short or Long Rest.'

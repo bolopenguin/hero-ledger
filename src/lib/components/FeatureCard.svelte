@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { Pencil, Eye, EyeOff, Trash2, RotateCcw } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { allFeats, featAbilities, featAsiPoints, makeCtx, scores, type RFeature } from '$lib/calc';
-	import { allPackOptions } from '$lib/packs.svelte';
+	import { allFeats, allOptions, featAbilities, featAsiPoints, makeCtx, scores, type RFeature } from '$lib/calc';
 	import { fillTemplate } from '$lib/formula';
 	import { ACTION_LABELS, AB_NAMES } from '$lib/data/srd';
 	import { ABILITIES, type ActionType, type PickKind, type Recharge } from '$lib/types';
@@ -35,7 +34,7 @@
 		const cats: PickKind[] =
 			kind === 'origin' ? ['origin'] : kind === 'style' ? ['style'] : kind === 'epic' ? ['epic', 'general', 'origin'] : ['general', 'origin', 'style'];
 		return Object.entries(feats)
-			.filter(([k, d]) => k !== 'asi' && cats.includes(d.cat))
+			.filter(([k, d]) => k !== 'asi' && cats.includes(d.cat) && (!d.forClass || d.forClass === ch.classId))
 			.sort((a, b) => cats.indexOf(a[1].cat) - cats.indexOf(b[1].cat) || a[1].name.localeCompare(b[1].name));
 	}
 	// ASI levels offer a choice between raising ability scores and taking a feat.
@@ -58,7 +57,7 @@
 
 	// Option lists: invocations, metamagic, maneuvers…
 	const ctx = $derived(makeCtx(ch, scores(ch)));
-	const optList = $derived(f.choose ? allPackOptions()[f.choose.list] : undefined);
+	const optList = $derived(f.choose ? allOptions(ch)[f.choose.list] : undefined);
 	const chosen = $derived(f.choose ? (ch.choices[f.key] ?? []) : []);
 	let showOptions = $state(false);
 	function toggleOption(k: string) {

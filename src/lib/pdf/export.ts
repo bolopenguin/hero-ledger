@@ -23,7 +23,7 @@ import {
 	spellcasting,
 	subclassName
 } from '../calc';
-import { grantedSpells } from '../calc';
+import { grantedSpells, SPELL_KIND_LABEL } from '../calc';
 import { allPackOptions, allPackSpells } from '../packs.svelte';
 import { fillTemplate } from '../formula';
 import { newSpell } from '../store.svelte';
@@ -542,7 +542,7 @@ export async function buildPdf(ch: Character, packsUsed: ContentPack[]): Promise
 				cost: d?.cost ?? 0,
 				consumed: !!d?.consumed,
 				desc: d?.d ?? '',
-				notes: `From ${g.source}`
+				notes: `${d?.level === 0 ? 'Cantrip, known' : SPELL_KIND_LABEL[g.kind]} (${g.source})`
 			});
 		});
 	if (s.ability || ch.spells.list.length || grantedRows.length) {

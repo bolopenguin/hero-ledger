@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Plus, Trash2 } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { getClass, grantedSpells, scores, signed, spellcasting } from '$lib/calc';
+	import { getClass, grantedSpells, scores, signed, spellcasting, SPELL_KIND_LABEL } from '$lib/calc';
+	import { PREP_RULE } from '$lib/classStats';
 	import { AB_NAMES } from '$lib/data/srd';
 	import { newSpell } from '$lib/store.svelte';
 	import { allPackSpells } from '$lib/packs.svelte';
@@ -34,16 +35,23 @@
 	let maxLevelOnly = $state(true);
 	const className = $derived(s.list);
 	const maxSpellLevel = $derived(s.pact ? s.pact.level : Math.max(0, ...s.slots.map((n, i) => (n ? i + 1 : 0))));
-	const matches = $derived.by(() => {
+	let levelTab = $state<number | 'all'>('all');
+	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		const have = new Set([...ch.spells.list.map((x) => x.name.toLowerCase()), ...granted.map((g) => g.name.toLowerCase())]);
 		return library
 			.filter((x) => !have.has(x.name.toLowerCase()))
 			.filter((x) => !classOnly || !className || x.classes.some((c) => c.toLowerCase() === className))
 			.filter((x) => !maxLevelOnly || x.level <= maxSpellLevel)
-			.filter((x) => !q || x.name.toLowerCase().includes(q) || x.school.toLowerCase() === q)
-			.slice(0, 40);
+			.filter((x) => !q || x.name.toLowerCase().includes(q) || x.school.toLowerCase() === q);
 	});
+	// Level tabs with counts, so every level is reachable without typing.
+	const levelCounts = $derived.by(() => {
+		const m = new Map<number, number>();
+		for (const x of filtered) m.set(x.level, (m.get(x.level) ?? 0) + 1);
+		return [...m.entries()].sort((a, b) => a[0] - b[0]);
+	});
+	const matches = $derived(levelTab === 'all' ? filtered : filtered.filter((x) => x.level === levelTab));
 	function addFromLibrary(d: SpellDef) {
 		ch.spells.list.push(
 			newSpell({
@@ -68,6 +76,20 @@
 </script>
 
 <div class="flex flex-col gap-3">
+	{#if !s.caster}
+		<section class="panel">
+			<h2 class="panel-title">Spells</h2>
+			<p class="text-base-content/70 text-sm">{cls?.name ?? 'Your class'} doesn't cast spells at level {ch.level}{ch.classId === 'fighter' || ch.classId === 'rogue' ? ' (the Eldritch Knight and Arcane Trickster subclasses add spellcasting at level 3)' : ''}. Spells from your species, feats or items still go below.</p>
+			<label class="mt-2 flex items-center gap-2 text-sm">
+				<span>Spellcasting ability for those spells</span>
+				<select class="select select-sm w-40" bind:value={ch.spells.ability}>
+					<option value="">— choose —</option>
+					{#each ABILITIES as ab (ab)}<option value={ab}>{AB_NAMES[ab]}</option>{/each}
+				</select>
+				{#if ch.spells.ability}<span class="text-base-content/70">DC {s.dc} · attack {signed(s.atk)}</span>{/if}
+			</label>
+		</section>
+	{:else}
 	<section class="panel" aria-labelledby="sc-h">
 		<h2 id="sc-h" class="panel-title">Spellcasting</h2>
 		<div class="flex flex-wrap items-end gap-x-8 gap-y-3">
@@ -99,15 +121,17 @@
 		{:else}
 			<p class="text-base-content/60 mt-2 text-sm">Your class has no spell slots at this level. Spells from feats or species still go in the list below.</p>
 		{/if}
+		{#if PREP_RULE[ch.classId]}<p class="text-base-content/65 mt-3 text-xs">{PREP_RULE[ch.classId]}</p>{/if}
 	</section>
+	{/if}
 
 	{#if granted.length}
 		<section class="panel" aria-labelledby="ap-h">
-			<h2 id="ap-h" class="panel-title">Always prepared <span class="text-base-content/50 font-sans text-xs font-normal tracking-normal normal-case">from your features; they don't count against your prepared spells</span></h2>
+			<h2 id="ap-h" class="panel-title">Spells from your features <span class="text-base-content/50 font-sans text-xs font-normal tracking-normal normal-case">they don't count against your prepared spells</span></h2>
 			<div class="overflow-x-auto">
 				<table class="table-sm table min-w-[46rem]">
 					<thead>
-						<tr class="label-xs"><th class="w-12">Lvl</th><th>Name</th><th>Casting time</th><th>Range</th><th>Duration</th><th>Comp.</th><th>From</th></tr>
+						<tr class="label-xs"><th class="w-12">Lvl</th><th>Name</th><th>Casting time</th><th>Range</th><th>Duration</th><th>Comp.</th><th>How</th><th>From</th></tr>
 					</thead>
 					<tbody>
 						{#each granted as g (g.name)}
@@ -122,6 +146,7 @@
 								<td class="text-sm">{g.def?.range ?? ''}</td>
 								<td class="text-sm">{g.def?.duration ?? ''}</td>
 								<td class="text-sm">{g.def?.comp ?? ''}{#if g.def?.cost}<span class="text-secondary ml-1 font-semibold">{g.def.cost} GP{g.def.consumed ? ' (used up)' : ''}</span>{/if}</td>
+								<td class="text-xs whitespace-nowrap">{g.def?.level === 0 ? 'Cantrip, known' : SPELL_KIND_LABEL[g.kind]}</td>
 								<td class="text-base-content/60 text-xs">{g.source}</td>
 							</tr>
 						{/each}
@@ -133,7 +158,7 @@
 
 	<section class="panel" aria-labelledby="sl-h">
 		<div class="mb-2 flex items-center gap-2">
-			<h2 id="sl-h" class="panel-title mb-0">Cantrips & prepared spells</h2>
+			<h2 id="sl-h" class="panel-title mb-0">{ch.classId === 'wizard' ? 'Cantrips & spellbook' : 'Cantrips & prepared spells'}</h2>
 			<button type="button" class="btn btn-sm ml-auto" onclick={() => ch.spells.list.push(newSpell({ level: 1 }))}><Plus class="size-4" /> Spell</button>
 		</div>
 		{#if library.length}
@@ -143,8 +168,14 @@
 					<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" class="checkbox checkbox-xs" bind:checked={classOnly} /> {s.list ? s.list[0].toUpperCase() + s.list.slice(1) : 'Class'} list</label>
 					<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" class="checkbox checkbox-xs" bind:checked={maxLevelOnly} /> Up to level {maxSpellLevel}</label>
 				</div>
-				{#if query.trim() || matches.length <= 40}
-					<ul class="mt-2 flex max-h-72 flex-col overflow-y-auto">
+				<div class="mt-2 flex flex-wrap gap-1" role="tablist" aria-label="Spell level">
+					<button type="button" role="tab" aria-selected={levelTab === 'all'} class="btn btn-xs {levelTab === 'all' ? 'btn-neutral' : 'btn-ghost'}" onclick={() => (levelTab = 'all')}>All {filtered.length}</button>
+					{#each levelCounts as [lv, n] (lv)}
+						<button type="button" role="tab" aria-selected={levelTab === lv} class="btn btn-xs {levelTab === lv ? 'btn-neutral' : 'btn-ghost'}" onclick={() => (levelTab = lv)}>{lv === 0 ? 'Cantrips' : `Level ${lv}`} <span class="opacity-60">{n}</span></button>
+					{/each}
+				</div>
+				{#if true}
+					<ul class="mt-2 flex max-h-96 flex-col overflow-y-auto">
 						{#each matches as m (m.name)}
 							<li>
 								<button type="button" class="hover:bg-base-100 flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-sm" onclick={() => addFromLibrary(m)}>
