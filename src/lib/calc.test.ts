@@ -428,3 +428,43 @@ describe('your turn summary', () => {
 		expect(t.action[0].lines?.[0]).toBe('Longsword: +7 to hit, 1d8 + 4 Slashing');
 	});
 });
+
+describe('switches in the PDF', () => {
+	it('exports the switches as set in the app', async () => {
+		const ch = blankCharacter();
+		ch.classId = 'wizard';
+		ch.spells.list = [
+			newSpell({ name: 'Mage Armor', level: 1 }),
+			newSpell({ name: 'Shield', level: 1 })
+		];
+		ch.active = { 'mage-armor': true, 'shield-spell': true };
+		const bytes = await buildPdf(ch, []);
+		const r = await readPdf(
+			bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+		);
+		expect(r.character.active['mage-armor']).toBe(true);
+		expect(r.character.active['shield-spell']).toBe(true);
+		ch.active = {};
+		const b2 = await buildPdf(ch, []);
+		const r2 = await readPdf(
+			b2.buffer.slice(b2.byteOffset, b2.byteOffset + b2.byteLength) as ArrayBuffer
+		);
+		expect(r2.character.active['mage-armor']).toBeFalsy();
+	});
+});
+
+describe('turn summary follows switches', () => {
+	it('includes active riders in the weapon line', () => {
+		const ch = blankCharacter();
+		ch.classId = 'barbarian';
+		ch.level = 5;
+		ch.abilities = { str: 16, dex: 14, con: 16, int: 10, wis: 10, cha: 8 };
+		ch.attacks = [
+			newAttack({ name: 'Greataxe', weapon: 'greataxe', dice: '1d12', type: 'Slashing' })
+		];
+		ch.active = { rage: true };
+		expect(turnSummary(ch).action[0].lines?.[0]).toBe(
+			'Greataxe: +6 to hit, 1d12 + 5 Slashing (with Rage)'
+		);
+	});
+});

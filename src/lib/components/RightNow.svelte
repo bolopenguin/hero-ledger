@@ -23,6 +23,9 @@
 		{/each}
 		{#if on.length}<button type="button" class="btn btn-ghost btn-xs" onclick={() => (ch.active = {})}>All off</button>{/if}
 	</div>
+	{#if !compact}
+		<p class="text-base-content/55 text-xs">The PDF uses these switches as you set them: the ones on are ticked and counted in AC and damage, the others print as empty tick boxes.</p>
+	{/if}
 	{#each on as st (st.id)}
 		{#if st.notes}<p class="text-base-content/75 text-xs"><b>{st.name}:</b> {st.notes(ctx)}</p>{/if}
 	{/each}

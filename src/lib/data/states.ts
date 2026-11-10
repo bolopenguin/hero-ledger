@@ -237,7 +237,7 @@ export const STATES: StateDef[] = [
 	{
 		id: 'mage-armor',
 		name: 'Mage Armor',
-		hint: 'Mage Armor is on you (no armor worn).',
+		hint: 'Mage Armor is on you (no armor worn, lasts 8 hours).',
 		available: (c) => c.hasSpell('Mage Armor'),
 		ac: { base: (c) => 13 + c.m('dex'), baseLabel: 'Mage Armor 13 + Dex' }
 	},

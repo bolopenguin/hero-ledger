@@ -115,7 +115,14 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 			const r = attack(ch, a, sc);
 			const range = a.range ? `, ${a.range} ft` : a.props.includes('Reach') ? ', reach 10 ft' : '';
 			const m = a.mastery && mastered.has(a.weapon) ? `, ${a.mastery}` : '';
-			return `${a.name}: ${signed(r.toHit)} to hit, ${r.base} ${a.type}${m}${range}`;
+			const extra =
+				r.total !== r.base
+					? ` (with ${r.riders
+							.filter((x) => x.on)
+							.map((x) => x.r.name)
+							.join(', ')})`
+					: '';
+			return `${a.name}: ${signed(r.toHit)} to hit, ${r.total} ${r.types || a.type}${extra}${m}${range}`;
 		});
 	out.action.push({
 		name: n > 1 ? `Attack (${n} attacks)` : 'Attack',

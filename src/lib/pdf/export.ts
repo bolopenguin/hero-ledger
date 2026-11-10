@@ -262,7 +262,13 @@ class Writer {
 
 export async function buildPdf(input: Character, packsUsed: ContentPack[]): Promise<Uint8Array> {
 	// Print the character's normal state: situational switches (raging, hasted…) off.
-	const ch: Character = { ...input, active: {} };
+	// The printed sheet uses the switches exactly as set in the app.
+	const kept = Object.fromEntries(
+		availableStates(input)
+			.filter((st) => input.active?.[st.id])
+			.map((st) => [st.id, true])
+	);
+	const ch: Character = { ...input, active: kept };
 	const doc = await PDFDocument.create();
 	doc.setTitle(`${ch.name || 'Character'} - Character Sheet`);
 	doc.setCreator('Hero Ledger');
@@ -375,12 +381,26 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text(ac.parts.join(', '), colR, yr, 6.5, w.f, MUTED);
 		yr -= 9;
 	}
-	// On paper there are no switches: print the AC you get with each one.
-	const altAc = availableStates(ch, sc)
-		.filter((st) => st.ac)
-		.map((st) => `${st.name} ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
-	if (altAc.length) {
-		for (const t of w.wrap(`AC with: ${altAc.join(' · ')}`, rW, 6.5)) {
+	// On paper there are no switches: print the AC you get with each one (and without the ones kept on).
+	const acStates = availableStates(ch, sc).filter((st) => st.ac);
+	const altAc = acStates
+		.filter((st) => !kept[st.id])
+		.map(
+			(st) => `${st.name} ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`
+		);
+	const withoutAc = acStates
+		.filter((st) => kept[st.id])
+		.map((st) => {
+			const rest = { ...kept };
+			delete rest[st.id];
+			return `without ${st.name} ${armorClass({ ...ch, active: rest }, sc).value}`;
+		});
+	if (altAc.length || withoutAc.length) {
+		const parts = [
+			altAc.length ? `AC with: ${altAc.join(' · ')}` : '',
+			withoutAc.join(' · ')
+		].filter(Boolean);
+		for (const t of w.wrap(parts.join(' · '), rW, 6.5)) {
 			w.text(t, colR, yr, 6.5, w.f, MUTED);
 			yr -= 8.5;
 		}
@@ -559,8 +579,10 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			if (st.ac?.bonus) fx.push(`+${st.ac.bonus} AC`);
 			if (st.ac?.min) fx.push(`AC at least ${st.ac.min}`);
 			if (st.ac?.ignoreArmor)
-				fx.push(`AC ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
-			if (st.ac?.base) fx.push(`AC ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
+				fx.push(`AC ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`);
+			if (st.ac?.base)
+				fx.push(`AC ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`);
+			if (kept[st.id]) fx.push('on in this sheet');
 			if (st.speed) fx.push(`+${st.speed} ft Speed`);
 			if (st.spellDc) fx.push(`spell DC ${s0.dc + st.spellDc}`);
 			for (const r of st.riders?.(sctx) ?? [])
@@ -570,7 +592,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			const text = [fx.join('; '), st.notes?.(sctx)].filter(Boolean).join('. ');
 			w.ensure(16);
 			w.y -= 11;
-			w.check(['active', st.id], false, M + 6, w.y - 1, 7);
+			w.check(['active', st.id], !!kept[st.id], M + 6, w.y - 1, 7);
 			w.text(st.name, M + 17, w.y, 8.5, w.b);
 			if (text) w.para(text, M + 17, w.W - 17, 7.5, w.f, INK, 1.25);
 		}
