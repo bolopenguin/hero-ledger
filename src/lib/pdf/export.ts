@@ -23,7 +23,9 @@ import {
 	spellcasting,
 	subclassName
 } from '../calc';
-import { grantedSpells, SPELL_KIND_LABEL } from '../calc';
+import { availableStates, grantedSpells, SPELL_KIND_LABEL, stateCtx } from '../calc';
+import { classStats } from '../classStats';
+import { turnSummary, TURN_HINT, TURN_LABEL, type TurnSlot } from '../turn';
 import { allPackOptions, allPackSpells } from '../packs.svelte';
 import { fillTemplate } from '../formula';
 import { newSpell } from '../store.svelte';
@@ -271,6 +273,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 
 	const sc = scores(ch);
 	const c = makeCtx(ch, sc);
+	const s0 = spellcasting(ch, sc);
 	const cls = getClass(ch);
 	const sp = getSpecies(ch);
 	const bg = getBackground(ch);
@@ -371,6 +374,17 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	if (ac.parts.length) {
 		w.text(ac.parts.join(', '), colR, yr, 6.5, w.f, MUTED);
 		yr -= 9;
+	}
+	// On paper there are no switches: print the AC you get with each one.
+	const altAc = availableStates(ch, sc)
+		.filter((st) => st.ac)
+		.map((st) => `${st.name} ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
+	if (altAc.length) {
+		for (const t of w.wrap(`AC with: ${altAc.join(' · ')}`, rW, 6.5)) {
+			w.text(t, colR, yr, 6.5, w.f, MUTED);
+			yr -= 8.5;
+		}
+		yr -= 1;
 	}
 	// HP
 	w.box(colR, yr - 70, rW, 70, true);
@@ -473,6 +487,100 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			color: RULE
 		});
 	}
+
+	// ---------------- Your turn ----------------
+	w.newPage();
+	w.heading(`Your turn - ${cls?.name ?? ''} ${ch.level}${sub ? ` (${sub})` : ''}`);
+	const keyNums = classStats(ch);
+	if (keyNums.length) {
+		const per = 4;
+		const bw = (w.W - (per - 1) * 6) / per;
+		for (let k = 0; k < keyNums.length; k += per) {
+			w.ensure(36);
+			const row = keyNums.slice(k, k + per);
+			const top = w.y - 4;
+			row.forEach((st, idx) => {
+				const x = M + idx * (bw + 6);
+				w.box(x, top - 30, bw, 30);
+				w.label(st.label, x + 4, top - 9);
+				w.text(st.value, x + 4, top - 21, st.value.length > 16 ? 7.5 : 10, w.b);
+				if (st.hint)
+					w.text(w.wrap(st.hint, bw - 8, 5.5)[0] ?? '', x + 4, top - 28, 5.5, w.f, MUTED);
+			});
+			w.y = top - 34;
+		}
+	}
+	w.para(
+		'Move up to your Speed, take one Action, and one Bonus Action if something gives you one. One Reaction per round.',
+		M,
+		w.W,
+		7.5,
+		w.i,
+		MUTED
+	);
+	const turn = turnSummary(ch);
+	const slots: TurnSlot[] = ['action', 'bonus', 'reaction', 'onhit'];
+	for (const slot of slots) {
+		const list = turn[slot].filter((e) => e.source !== 'Basic' || e.name === 'Opportunity Attack');
+		if (!list.length) continue;
+		w.ensure(30);
+		w.y -= 14;
+		w.text(TURN_LABEL[slot].toUpperCase(), M, w.y, 9, w.b, ACCENT);
+		w.text(
+			TURN_HINT[slot],
+			M + w.width(TURN_LABEL[slot].toUpperCase(), 9, w.b) + 8,
+			w.y,
+			7,
+			w.i,
+			MUTED
+		);
+		w.y -= 2;
+		for (const e of list) {
+			w.ensure(20);
+			w.y -= 11;
+			w.text(e.name, M + 6, w.y, 8.5, w.b);
+			const tag = [e.source, e.uses].filter(Boolean).join(' | ');
+			w.text(tag, M + 12 + w.width(e.name, 8.5, w.b), w.y, 6.5, w.f, MUTED);
+			w.y -= 1;
+			for (const l of e.lines ?? []) w.para(l, M + 14, w.W - 14, 8, w.f, INK, 1.25);
+			if (e.detail) w.para(e.detail, M + 14, w.W - 14, 7.5, w.f, e.lines ? MUTED : INK, 1.25);
+		}
+	}
+	// Situational effects: tick them on paper when they apply.
+	const sctx = stateCtx(ch, sc);
+	const sits = availableStates(ch, sc);
+	if (sits.length) {
+		w.ensure(30);
+		w.y -= 14;
+		w.text('SITUATIONAL', M, w.y, 9, w.b, ACCENT);
+		w.text('Tick while it applies', M + 70, w.y, 7, w.i, MUTED);
+		for (const st of sits) {
+			const fx: string[] = [];
+			if (st.ac?.bonus) fx.push(`+${st.ac.bonus} AC`);
+			if (st.ac?.min) fx.push(`AC at least ${st.ac.min}`);
+			if (st.ac?.ignoreArmor)
+				fx.push(`AC ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
+			if (st.ac?.base) fx.push(`AC ${armorClass({ ...ch, active: { [st.id]: true } }, sc).value}`);
+			if (st.speed) fx.push(`+${st.speed} ft Speed`);
+			if (st.spellDc) fx.push(`spell DC ${s0.dc + st.spellDc}`);
+			for (const r of st.riders?.(sctx) ?? [])
+				fx.push(
+					`${r.name}: ${r.dmg ? `+${r.dmg}${r.type ? ' ' + r.type : ''}` : ''}${r.hit ? ` ${signed(r.hit)} to hit` : ''} (${r.applies === 'weapon' ? 'weapon attacks' : r.applies === 'all' ? 'all attacks' : `${r.applies} attacks`}${r.with?.length ? ', with ' + r.with.join(' + ') : ''})`
+				);
+			const text = [fx.join('; '), st.notes?.(sctx)].filter(Boolean).join('. ');
+			w.ensure(16);
+			w.y -= 11;
+			w.check(['active', st.id], false, M + 6, w.y - 1, 7);
+			w.text(st.name, M + 17, w.y, 8.5, w.b);
+			if (text) w.para(text, M + 17, w.W - 17, 7.5, w.f, INK, 1.25);
+		}
+	}
+	w.ensure(30);
+	w.y -= 14;
+	w.text('STANDARD ACTIONS', M, w.y, 9, w.b, ACCENT);
+	w.y -= 2;
+	for (const e of turn.action.filter((x) => x.source === 'Basic'))
+		w.para(`${e.name}. ${e.detail}`, M + 6, w.W - 6, 7, w.f, MUTED, 1.25);
 
 	// ---------------- Features ----------------
 	w.newPage();

@@ -18,6 +18,7 @@
 	import SheetTab from '$lib/components/SheetTab.svelte';
 	import CombatTab from '$lib/components/CombatTab.svelte';
 	import ClassTab from '$lib/components/ClassTab.svelte';
+	import TurnTab from '$lib/components/TurnTab.svelte';
 	import FeaturesTab from '$lib/components/FeaturesTab.svelte';
 	import SpellsTab from '$lib/components/SpellsTab.svelte';
 	import InventoryTab from '$lib/components/InventoryTab.svelte';
@@ -28,6 +29,7 @@
 		['sheet', 'Sheet'],
 		['class', 'Class'],
 		['combat', 'Combat'],
+		['turn', 'Your turn'],
 		['features', 'Features'],
 		['spells', 'Spells'],
 		['inventory', 'Inventory'],
@@ -253,6 +255,7 @@
 		{#if tab === 'sheet'}<SheetTab />
 		{:else if tab === 'class'}<ClassTab />
 		{:else if tab === 'combat'}<CombatTab />
+		{:else if tab === 'turn'}<TurnTab />
 		{:else if tab === 'features'}<FeaturesTab />
 		{:else if tab === 'spells'}<SpellsTab />
 		{:else if tab === 'inventory'}<InventoryTab />

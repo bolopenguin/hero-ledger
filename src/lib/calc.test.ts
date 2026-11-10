@@ -26,6 +26,7 @@ import { buildPdf } from './pdf/export';
 import { readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
 import { attacksPerAction, classStats } from './classStats';
+import { turnSummary } from './turn';
 import { CLASS_STARTING, GEAR_BY_NAME, parseBackgroundEquipment } from './data/equipment';
 
 describe('formulas and dice', () => {
@@ -400,5 +401,30 @@ describe('situational switches', () => {
 		const dc = spellcasting(s).dc;
 		s.active = { 'innate-sorcery': true };
 		expect(spellcasting(s).dc).toBe(dc + 1);
+	});
+});
+
+describe('your turn summary', () => {
+	it('groups attacks, features, spells and items by action type', () => {
+		const ch = sampleCharacter();
+		ch.spells.list = [
+			newSpell({ name: 'Shield', level: 1, time: 'Reaction (when hit)', prepared: true }),
+			newSpell({ name: 'Misty Step', level: 2, time: 'Bonus Action', prepared: true }),
+			newSpell({ name: 'Fire Bolt', level: 0, time: 'Action' }),
+			newSpell({ name: 'Alarm', level: 1, time: '1 minute', prepared: false })
+		];
+		const t = turnSummary(ch);
+		const names = (slot: keyof typeof t) => t[slot].map((e) => e.name);
+		expect(names('action')).toEqual(
+			expect.arrayContaining(['Attack (2 attacks)', 'Fire Bolt', 'Dash', 'Dodge'])
+		);
+		expect(names('action')).not.toContain('Extra Attack');
+		expect(names('bonus')).toEqual(
+			expect.arrayContaining(['Second Wind', 'Misty Step', 'Potion of Healing (2)'])
+		);
+		expect(names('reaction')).toEqual(expect.arrayContaining(['Opportunity Attack', 'Shield']));
+		expect(names('onhit')).toContain('Action Surge');
+		expect(names('long')).not.toContain('Alarm'); // not prepared
+		expect(t.action[0].lines?.[0]).toBe('Longsword: +7 to hit, 1d8 + 4 Slashing');
 	});
 });

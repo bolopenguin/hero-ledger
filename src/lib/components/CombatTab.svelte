@@ -67,7 +67,7 @@
 
 <section class="panel mb-3" aria-label="Right now"><RightNow /></section>
 
-<div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+<div class="grid gap-3">
 	<section class="panel" aria-labelledby="attacks-h">
 		<div class="mb-2 flex flex-wrap items-center gap-2">
 			<h2 id="attacks-h" class="panel-title mb-0">Attacks</h2>
@@ -216,14 +216,5 @@
 		</div>
 	</section>
 
-	<section class="panel" aria-labelledby="actions-h">
-		<h2 id="actions-h" class="panel-title flex items-center gap-2"><Swords class="size-4" /> What you can do on your turn</h2>
-		{#each groups as g (g.a)}
-			{@const list = feats.filter((f) => f.a === g.a)}
-			{#if list.length}
-				<h3 class="label-xs border-base-300 mt-3 border-b pb-1">{g.label}</h3>
-				{#each list as f (f.key)}<FeatureCard {f} compact />{/each}
-			{/if}
-		{/each}
-	</section>
+
 </div>
