@@ -1,12 +1,20 @@
 // Content packs: extra subclasses, feats, species and backgrounds loaded from a JSON file.
 // They live in the user's browser and travel inside the files they export.
-import type { BackgroundDef, FeatDef, Feature, SpeciesDef } from './types';
+import type { Ab, BackgroundDef, FeatDef, Feature, SpeciesDef, SpellDef } from './types';
 
 export interface PackSubclass {
 	id: string;
 	class: string;
 	name: string;
 	features: Feature[];
+	/** For subclasses that add spellcasting to a non-caster class (e.g. Eldritch Knight). */
+	caster?: 'third' | 'half' | 'full' | 'pact';
+	castAbil?: Ab;
+	cantrips?: [number, number][];
+	/** Prepared spells by class level (20 entries). */
+	prepared?: number[];
+	/** Class whose spell list the subclass casts from, e.g. "wizard". */
+	spellList?: string;
 }
 
 export interface ContentPack {
@@ -17,6 +25,7 @@ export interface ContentPack {
 	feats?: Record<string, FeatDef>;
 	species?: Record<string, SpeciesDef>;
 	backgrounds?: Record<string, BackgroundDef>;
+	spells?: SpellDef[];
 }
 
 const KEY = 'hero-ledger:packs';
@@ -55,6 +64,9 @@ export function validatePack(p: unknown): ContentPack {
 			if (typeof f.l !== 'number' || !f.n)
 				throw new Error(`A feature of "${s.name}" needs "l" (level) and "n" (name).`);
 	}
+	for (const sp of o.spells ?? [])
+		if (!sp.name || typeof sp.level !== 'number')
+			throw new Error(`Spell "${sp.name ?? '?'}" needs a name and a numeric level.`);
 	return o;
 }
 
@@ -96,6 +108,13 @@ export function allPackSpecies(): Record<string, SpeciesDef> {
 	for (const p of packs.list)
 		for (const [k, s] of Object.entries(p.species ?? {})) out[`pack:${p.id}:${k}`] = s;
 	return out;
+}
+
+/** Every spell from installed packs, deduplicated by name (later packs win). */
+export function allPackSpells(): SpellDef[] {
+	const byName = new Map<string, SpellDef>();
+	for (const p of packs.list) for (const s of p.spells ?? []) byName.set(s.name.toLowerCase(), s);
+	return [...byName.values()].sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 }
 
 export function allPackBackgrounds(): Record<string, BackgroundDef> {

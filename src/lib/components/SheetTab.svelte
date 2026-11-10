@@ -53,8 +53,12 @@
 	function heal(n: number) {
 		ch.hp.current = Math.min(maxHp, ch.hp.current + n);
 	}
+	// Cycle what the player sees: none -> proficient -> expertise. Background skills are
+	// always at least proficient, so for them the click toggles expertise on and off.
 	function cycleSkill(id: string) {
-		ch.skills[id] = ((ch.skills[id] ?? 0) + 1) % 3;
+		const eff = sk[id].prof;
+		if (sk[id].fromBg) ch.skills[id] = eff === 2 ? 0 : 2;
+		else ch.skills[id] = (eff + 1) % 3;
 	}
 	function setBgAsi(mode: string) {
 		const abs = bg?.abilities ?? [];
@@ -226,18 +230,24 @@
 					<button
 						type="button"
 						class="size-4 shrink-0 rounded-full border-2 {v.prof === 2 ? 'bg-secondary border-secondary ring-secondary ring-2 ring-offset-1' : v.prof === 1 ? 'bg-primary border-primary' : 'border-base-content/40'}"
-						title={v.fromBg && (ch.skills[id] ?? 0) === 0 ? 'Proficient from background (click for expertise)' : 'Click: none → proficient → expertise'}
+						title={v.fromBg ? 'Proficient from background. Click to toggle Expertise (PB added twice).' : 'Click: none → proficient → Expertise (PB added twice)'}
 						aria-label="{s.name} proficiency"
 						onclick={() => cycleSkill(id)}
 					></button>
 					<span class="num w-8 text-right font-semibold">{signed(v.value)}</span>
 					<span>{s.name}</span>
+					{#if v.prof === 2}<span class="text-secondary text-[0.65rem] font-semibold" title="Expertise: Proficiency Bonus added twice">EXP</span>{/if}
 					<span class="text-base-content/45 text-[0.65rem] uppercase">{s.ab}</span>
 					{#if v.fromBg}<span class="text-secondary text-[0.65rem]" title="From background">BG</span>{/if}
 				</li>
 			{/each}
 		</ul>
-		<p class="text-base-content/55 mt-2 text-xs">
+		<p class="text-base-content/55 mt-2 flex flex-wrap items-center gap-x-3 text-xs">
+			<span class="flex items-center gap-1"><span class="border-base-content/40 inline-block size-3 rounded-full border-2"></span>none</span>
+			<span class="flex items-center gap-1"><span class="bg-primary inline-block size-3 rounded-full"></span>proficient (+PB)</span>
+			<span class="flex items-center gap-1"><span class="bg-secondary ring-secondary inline-block size-3 rounded-full ring-2 ring-offset-1"></span>Expertise (+2×PB)</span>
+		</p>
+		<p class="text-base-content/55 mt-1 text-xs">
 			Class skills: choose {cls?.skills.n ?? 0}{cls?.skills.list === 'any' ? ' (any)' : ` from ${(cls?.skills.list as string[] | undefined)?.map((x) => SKILLS[x]?.name).join(', ')}`}.
 		</p>
 	</section>

@@ -27,6 +27,7 @@ describe('formulas and dice', () => {
 		expect(evalFormula('8 + wis + pb', c)).toBe(13);
 		expect(evalFormula('ceil(lvl / 2)', c)).toBe(3);
 		expect(evalFormula('nonsense(', c)).toBeNull();
+		expect(evalFormula('4 + 2 * (lvl >= 5) + 2 * (lvl >= 9)', c)).toBe(6);
 		expect(fillTemplate('DC {8 + wis + pb}', c)).toBe('DC 13');
 	});
 	it('parses and averages dice', () => {
@@ -51,6 +52,15 @@ describe('sample fighter (level 5 Champion, dwarf)', () => {
 		expect(initiative(ch, sc)).toBe(1);
 		// d10: 10 + 6*4 + con(+2)*5 + dwarf 5
 		expect(hpMax(ch, sc)).toBe(49);
+	});
+	it('applies Expertise as double proficiency', () => {
+		const c2 = sampleCharacter();
+		c2.skills.athletics = 2; // background skill raised to Expertise
+		c2.skills.stealth = 2;
+		const sk = skills(c2, scores(c2));
+		expect(sk.athletics.value).toBe(4 + 6);
+		expect(sk.stealth.value).toBe(1 + 6);
+		expect(sk.athletics.prof).toBe(2);
 	});
 	it('computes attacks with riders and crit range', () => {
 		const ls = attack(ch, ch.attacks[0], sc);

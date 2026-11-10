@@ -68,6 +68,9 @@ A pack is a JSON file loaded from **Packs → Load pack file**:
 - `u` uses: a number or formula (`lvl`, `pb`, `str`…`cha` modifiers, `min`, `max`, `floor`, `ceil`).
 - `r` recharge: `short`, `short1` (one use per Short Rest, all per Long Rest) or `long`.
 - `{formula}` inside `d` is replaced with the computed number.
+- A subclass that adds spellcasting to a non-caster (Eldritch Knight, Arcane Trickster) can set `"caster": "third"`, `"castAbil": "int"`, `"spellList": "wizard"`, `"cantrips": [[3, 2], [10, 3]]` and `"prepared"` (20 numbers, one per class level).
+- `spells` is an array of spells: `name`, `level` (0 for cantrips), `school`, `time`, `range`, `comp`, `duration`, `conc`, `ritual`, `classes`, `d`, and optionally `higher`, `material`, `cost` (GP) and `consumed`. They appear in the Spells tab search, filtered by your spell list and the levels you can cast.
+- `scripts/build-pack.mjs` merges a folder of pieces (subclass files, `spells*.json`, `feats.json`…) into one pack file.
 
 Packs travel inside exported PDFs and character files, so a character opens correctly on another device.
 

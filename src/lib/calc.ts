@@ -516,11 +516,16 @@ export function attunementMax(ch: Character) {
 export function spellcasting(ch: Character, sc = scores(ch)) {
 	const cls = getClass(ch);
 	const c = makeCtx(ch, sc);
-	const ability: Ab | null = (ch.spells.ability || cls?.castAbil) ?? null;
-	const caster = cls?.caster;
+	// A pack subclass can grant spellcasting to a class that has none (third casters).
+	const sub = ch.subclassId.startsWith('pack:') ? findPackSubclass(ch.subclassId) : null;
+	const fromSub = !cls?.caster && !!sub?.caster && ch.level >= 3;
+	const src = fromSub ? sub! : cls;
+	const ability: Ab | null = (ch.spells.ability || src?.castAbil) ?? null;
+	const caster = src?.caster;
 	let slots: number[] = [];
 	let pact: { n: number; level: number } | null = null;
 	if (caster === 'full') slots = FULL_SLOTS[ch.level - 1];
+	else if (caster === 'third') slots = FULL_SLOTS[Math.ceil(ch.level / 3) - 1];
 	else if (caster === 'half') slots = FULL_SLOTS[Math.ceil(ch.level / 2) - 1];
 	else if (caster === 'pact')
 		pact = {
@@ -536,14 +541,16 @@ export function spellcasting(ch: Character, sc = scores(ch)) {
 	const innate = 0;
 	return {
 		ability,
+		/** Spell list to draw from: the subclass's (e.g. Wizard for an Eldritch Knight) or the class's. */
+		list: (fromSub && sub?.spellList) || cls?.name.toLowerCase() || '',
 		caster: caster ?? null,
 		mod: m,
 		dc: ov(ch, 'spellDc', 8 + m + c.pb + innate),
 		atk: ov(ch, 'spellAtk', m + c.pb),
 		slots: [...slots, 0, 0, 0, 0, 0, 0, 0, 0, 0].slice(0, 9),
 		pact,
-		cantrips: cls?.cantrips ? by(ch.level, cls.cantrips) : null,
-		prepared: cls?.prepared ? cls.prepared[ch.level - 1] : null
+		cantrips: src?.cantrips ? by(ch.level, src.cantrips) : null,
+		prepared: src?.prepared ? src.prepared[ch.level - 1] : null
 	};
 }
 

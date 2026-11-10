@@ -575,12 +575,30 @@ export async function buildPdf(ch: Character, packsUsed: ContentPack[]): Promise
 			w.text(spl.range, M + 238, w.y, 7.5);
 			w.text(spl.duration, M + 296, w.y, 7.5);
 			w.text([spl.conc ? 'C' : '', spl.ritual ? 'R' : ''].join(' '), M + 372, w.y, 7.5, w.b);
-			w.text(spl.comp, M + 398, w.y, 7.5);
+			w.text(
+				spl.cost ? `${spl.comp} ${spl.cost}gp${spl.consumed ? '*' : ''}` : spl.comp,
+				M + 398,
+				w.y,
+				7.5,
+				spl.cost ? w.b : w.f
+			);
 			notes.forEach((t, k) => w.text(t, M + 440, w.y - k * 9, 7.5));
 			w.y -= (notes.length - 1) * 9;
+			if (spl.desc) {
+				w.y += 3;
+				w.para(spl.desc, M + 24, 400, 7, w.f, MUTED, 1.25);
+				w.y -= 2;
+			}
 		}
 		w.y -= 6;
-		w.para('* always prepared   ( ) not prepared today', M, w.W, 7, w.i, MUTED);
+		w.para(
+			'* always prepared   ( ) not prepared today   NNgp = material cost (gp* = consumed)',
+			M,
+			w.W,
+			7,
+			w.i,
+			MUTED
+		);
 	}
 
 	// ---------------- Equipment ----------------

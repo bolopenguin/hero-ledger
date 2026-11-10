@@ -161,10 +161,34 @@ export interface Pick {
 	asi?: Partial<Record<Ab, number>>;
 }
 
+/** A spell from a content pack. Descriptions are short summaries. */
+export interface SpellDef {
+	name: string;
+	level: number;
+	school: string;
+	time: string;
+	range: string;
+	comp: string;
+	/** What the Material component is, e.g. "a diamond worth 300+ GP". */
+	material?: string;
+	/** Gold cost of the Material component, if it has one. */
+	cost?: number;
+	/** The spell consumes the costly material. */
+	consumed?: boolean;
+	duration: string;
+	conc: boolean;
+	ritual: boolean;
+	classes: string[];
+	d: string;
+	higher?: string;
+}
+
 export interface Spell {
 	id: string;
 	level: number;
 	name: string;
+	school: string;
+	desc: string;
 	prepared: boolean;
 	always: boolean;
 	time: string;
@@ -173,6 +197,9 @@ export interface Spell {
 	conc: boolean;
 	ritual: boolean;
 	comp: string;
+	material: string;
+	cost: number;
+	consumed: boolean;
 	notes: string;
 }
 

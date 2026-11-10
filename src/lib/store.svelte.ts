@@ -115,6 +115,8 @@ export function newSpell(p: Partial<Spell> = {}): Spell {
 		id: uid(),
 		level: 0,
 		name: '',
+		school: '',
+		desc: '',
 		prepared: true,
 		always: false,
 		time: '1 action',
@@ -123,6 +125,9 @@ export function newSpell(p: Partial<Spell> = {}): Spell {
 		conc: false,
 		ritual: false,
 		comp: 'V, S',
+		material: '',
+		cost: 0,
+		consumed: false,
 		notes: '',
 		...p
 	};

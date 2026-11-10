@@ -2,7 +2,7 @@ import type { Ab, Ctx } from './types';
 
 /**
  * Tiny safe formula evaluator for custom values.
- * Supports numbers, + - * / ( ), identifiers lvl/level, pb, str..cha (modifiers)
+ * Supports numbers, + - * / ( ), comparisons (>= <= > < == != give 1 or 0), identifiers lvl/level, pb, str..cha (modifiers)
  * and functions min, max, floor, ceil, round. Division rounds down when used via floor().
  */
 const ABS: Ab[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -22,7 +22,25 @@ export function evalFormula(src: string, c: Ctx): number | null {
 	const ws = () => {
 		while (s[i] === ' ') i++;
 	};
+	// Comparisons give 1 or 0, e.g. "2 + 2 * (lvl >= 5)".
 	const expr = (): number => {
+		const left = sum();
+		ws();
+		const m = /^(>=|<=|==|!=|>|<)/.exec(s.slice(i));
+		if (!m) return left;
+		i += m[0].length;
+		const right = sum();
+		const ops: Record<string, boolean> = {
+			'>=': left >= right,
+			'<=': left <= right,
+			'==': left === right,
+			'!=': left !== right,
+			'>': left > right,
+			'<': left < right
+		};
+		return ops[m[0]] ? 1 : 0;
+	};
+	const sum = (): number => {
 		let v = term();
 		ws();
 		while (peek() === '+' || peek() === '-') {

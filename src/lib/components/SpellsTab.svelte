@@ -4,7 +4,8 @@
 	import { getClass, scores, signed, spellcasting } from '$lib/calc';
 	import { AB_NAMES } from '$lib/data/srd';
 	import { newSpell } from '$lib/store.svelte';
-	import { ABILITIES } from '$lib/types';
+	import { allPackSpells } from '$lib/packs.svelte';
+	import { ABILITIES, type SpellDef } from '$lib/types';
 	import Stat from './Stat.svelte';
 	import Pips from './Pips.svelte';
 
@@ -17,6 +18,45 @@
 	const preparedCount = $derived(ch.spells.list.filter((x) => x.level > 0 && x.prepared && !x.always).length);
 	const cantripCount = $derived(ch.spells.list.filter((x) => x.level === 0).length);
 	const ord = (n: number) => (n === 0 ? 'Cantrips' : `Level ${n}`);
+
+	// Spell search from content packs.
+	const library = $derived(allPackSpells());
+	let query = $state('');
+	let classOnly = $state(true);
+	let maxLevelOnly = $state(true);
+	const className = $derived(s.list);
+	const maxSpellLevel = $derived(s.pact ? s.pact.level : Math.max(0, ...s.slots.map((n, i) => (n ? i + 1 : 0))));
+	const matches = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		const have = new Set(ch.spells.list.map((x) => x.name.toLowerCase()));
+		return library
+			.filter((x) => !have.has(x.name.toLowerCase()))
+			.filter((x) => !classOnly || !className || x.classes.some((c) => c.toLowerCase() === className))
+			.filter((x) => !maxLevelOnly || x.level <= maxSpellLevel)
+			.filter((x) => !q || x.name.toLowerCase().includes(q) || x.school.toLowerCase() === q)
+			.slice(0, 40);
+	});
+	function addFromLibrary(d: SpellDef) {
+		ch.spells.list.push(
+			newSpell({
+				name: d.name,
+				level: d.level,
+				school: d.school,
+				time: d.time,
+				range: d.range,
+				duration: d.duration,
+				conc: d.conc,
+				ritual: d.ritual,
+				comp: d.comp,
+				material: d.material ?? '',
+				cost: d.cost ?? 0,
+				consumed: !!d.consumed,
+				desc: [d.d, d.higher ? `Higher levels: ${d.higher}` : ''].filter(Boolean).join('\n')
+			})
+		);
+		query = '';
+	}
+	let openDesc = $state<Record<string, boolean>>({});
 </script>
 
 <div class="flex flex-col gap-3">
@@ -26,7 +66,7 @@
 			<label class="flex flex-col">
 				<span class="label-xs">Ability</span>
 				<select class="select select-sm" bind:value={ch.spells.ability}>
-					<option value="">Auto ({cls?.castAbil ? AB_NAMES[cls.castAbil] : 'none'})</option>
+					<option value="">Auto ({s.ability ? AB_NAMES[s.ability] : 'none'})</option>
 					{#each ABILITIES as ab (ab)}<option value={ab}>{AB_NAMES[ab]}</option>{/each}
 				</select>
 			</label>
@@ -58,21 +98,53 @@
 			<h2 id="sl-h" class="panel-title mb-0">Cantrips & prepared spells</h2>
 			<button type="button" class="btn btn-sm ml-auto" onclick={() => ch.spells.list.push(newSpell({ level: 1 }))}><Plus class="size-4" /> Spell</button>
 		</div>
+		{#if library.length}
+			<div class="bg-base-200 rounded-box mb-3 p-2">
+				<div class="flex flex-wrap items-center gap-2">
+					<input class="input input-sm min-w-0 flex-1" placeholder="Search {library.length} spells from your packs…" bind:value={query} aria-label="Search spells" />
+					<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" class="checkbox checkbox-xs" bind:checked={classOnly} /> {s.list ? s.list[0].toUpperCase() + s.list.slice(1) : 'Class'} list</label>
+					<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" class="checkbox checkbox-xs" bind:checked={maxLevelOnly} /> Up to level {maxSpellLevel}</label>
+				</div>
+				{#if query.trim() || matches.length <= 40}
+					<ul class="mt-2 flex max-h-72 flex-col overflow-y-auto">
+						{#each matches as m (m.name)}
+							<li>
+								<button type="button" class="hover:bg-base-100 flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-sm" onclick={() => addFromLibrary(m)}>
+									<Plus class="size-3.5 shrink-0 translate-y-0.5" />
+									<span class="font-semibold">{m.name}</span>
+									<span class="text-base-content/60 text-xs">{m.level === 0 ? 'Cantrip' : `Level ${m.level}`} · {m.school}{m.conc ? ' · C' : ''}{m.ritual ? ' · R' : ''}{m.cost ? ` · ${m.cost} GP${m.consumed ? ' consumed' : ''}` : ''}</span>
+									<span class="text-base-content/60 hidden truncate text-xs md:inline">{m.d}</span>
+								</button>
+							</li>
+						{:else}
+							<li class="text-base-content/60 px-2 py-1 text-sm">No match. Untick the filters or check the spelling.</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		{:else}
+			<p class="text-base-content/60 mb-2 text-xs">Load a content pack with spells (Packs) to search and add them with their details filled in.</p>
+		{/if}
 		{#if !sorted.length}<p class="text-base-content/60 py-4 text-center text-sm">No spells yet.</p>{/if}
 		<div class="overflow-x-auto">
 			<table class="table-sm table min-w-[52rem]">
 				<thead>
 					<tr class="label-xs">
-						<th class="w-14">Lvl</th><th>Name</th><th class="w-10" title="Prepared">Prep</th><th class="w-10" title="Always prepared">Alw</th><th>Casting time</th><th>Range</th><th>Duration</th><th class="w-10" title="Concentration">C</th><th class="w-10" title="Ritual">R</th><th>Comp.</th><th>Notes / page</th><th></th>
+						<th class="w-14">Lvl</th><th>Name</th><th class="w-10" title="Prepared">Prep</th><th class="w-10" title="Always prepared">Alw</th><th>Casting time</th><th>Range</th><th>Duration</th><th class="w-10" title="Concentration">C</th><th class="w-10" title="Ritual">R</th><th>Comp.</th><th title="Gold cost of the Material component">Cost GP</th><th>Notes / page</th><th></th>
 					</tr>
 				</thead>
 				{#each levels as lv (lv)}
 					<tbody>
-						<tr><td colspan="12" class="font-display text-primary pt-3 font-bold">{ord(lv)}</td></tr>
+						<tr><td colspan="13" class="font-display text-primary pt-3 font-bold">{ord(lv)}</td></tr>
 						{#each sorted.filter((x) => x.level === lv) as sp (sp.id)}
 							<tr>
 								<td><input type="number" min="0" max="9" class="input input-xs num w-12" bind:value={sp.level} /></td>
-								<td><input class="input input-xs w-full min-w-36 font-semibold" bind:value={sp.name} placeholder="Spell name" /></td>
+								<td>
+									<div class="flex items-center gap-1">
+										<input class="input input-xs w-full min-w-36 font-semibold" bind:value={sp.name} placeholder="Spell name" />
+										<button type="button" class="btn btn-ghost btn-xs px-1 {sp.desc ? '' : 'opacity-40'}" title="Description" onclick={() => (openDesc[sp.id] = !openDesc[sp.id])}>{openDesc[sp.id] ? '▴' : '▾'}</button>
+									</div>
+								</td>
 								<td><input type="checkbox" class="checkbox checkbox-xs" bind:checked={sp.prepared} /></td>
 								<td><input type="checkbox" class="checkbox checkbox-xs" bind:checked={sp.always} /></td>
 								<td><input class="input input-xs w-full min-w-24" bind:value={sp.time} /></td>
@@ -80,10 +152,24 @@
 								<td><input class="input input-xs w-full min-w-24" bind:value={sp.duration} /></td>
 								<td><input type="checkbox" class="checkbox checkbox-xs" bind:checked={sp.conc} /></td>
 								<td><input type="checkbox" class="checkbox checkbox-xs" bind:checked={sp.ritual} /></td>
-								<td><input class="input input-xs w-20" bind:value={sp.comp} /></td>
+								<td><input class="input input-xs w-20" bind:value={sp.comp} title={sp.material} /></td>
+								<td class="whitespace-nowrap">
+									<input type="number" min="0" class="input input-xs num w-16 {sp.cost ? 'text-secondary font-semibold' : ''}" bind:value={sp.cost} title={sp.material || 'Material cost in GP'} />
+									{#if sp.consumed}<span class="text-warning text-[0.65rem] font-semibold" title="The spell consumes the material">USED UP</span>{/if}
+								</td>
 								<td><input class="input input-xs w-full min-w-40" bind:value={sp.notes} /></td>
 								<td><button type="button" class="btn btn-ghost btn-xs btn-square" aria-label="Delete {sp.name}" onclick={() => (ch.spells.list = ch.spells.list.filter((x) => x.id !== sp.id))}><Trash2 class="size-3.5" /></button></td>
 							</tr>
+							{#if openDesc[sp.id]}
+								<tr>
+									<td></td>
+									<td colspan="12">
+										{#if sp.material}<p class="text-base-content/70 mb-1 text-xs"><b>Material:</b> {sp.material}{sp.cost ? ` (${sp.cost} GP${sp.consumed ? ', consumed' : ''})` : ''}</p>{/if}
+										<textarea class="textarea textarea-xs w-full" rows="3" placeholder="What the spell does" bind:value={sp.desc}></textarea>
+										{#if sp.school}<span class="text-base-content/50 text-xs">{sp.school}</span>{/if}
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				{/each}
