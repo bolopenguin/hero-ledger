@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+@plugin 'daisyui' {
+	themes: false;
+}
+
+/* Layout: a working ledger. Wide two-column sheet on desktop, single column on phones. */
+@plugin 'daisyui/theme' {
+	name: 'ledger';
+	default: true;
+	prefersdark: false;
+	color-scheme: light;
+	--color-base-100: oklch(98.6% 0.004 250);
+	--color-base-200: oklch(95.4% 0.007 250);
+	--color-base-300: oklch(89.5% 0.011 250);
+	--color-base-content: oklch(25% 0.025 262);
+	--color-primary: oklch(43% 0.135 22);
+	--color-primary-content: oklch(97% 0.01 22);
+	--color-secondary: oklch(62% 0.11 78);
+	--color-secondary-content: oklch(22% 0.03 78);
+	--color-accent: oklch(52% 0.08 205);
+	--color-accent-content: oklch(98% 0.01 205);
+	--color-neutral: oklch(32% 0.025 262);
+	--color-neutral-content: oklch(96% 0.006 250);
+	--color-info: oklch(55% 0.11 245);
+	--color-info-content: oklch(98% 0.01 245);
+	--color-success: oklch(55% 0.12 155);
+	--color-success-content: oklch(98% 0.01 155);
+	--color-warning: oklch(72% 0.14 70);
+	--color-warning-content: oklch(22% 0.04 70);
+	--color-error: oklch(52% 0.18 27);
+	--color-error-content: oklch(98% 0.01 27);
+	--radius-selector: 0.25rem;
+	--radius-field: 0.3rem;
+	--radius-box: 0.45rem;
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'ledger-dark';
+	default: false;
+	prefersdark: true;
+	color-scheme: dark;
+	--color-base-100: oklch(21% 0.016 262);
+	--color-base-200: oklch(18% 0.015 262);
+	--color-base-300: oklch(30% 0.02 262);
+	--color-base-content: oklch(92% 0.01 250);
+	--color-primary: oklch(66% 0.14 22);
+	--color-primary-content: oklch(18% 0.03 22);
+	--color-secondary: oklch(76% 0.11 80);
+	--color-secondary-content: oklch(20% 0.03 80);
+	--color-accent: oklch(70% 0.08 205);
+	--color-accent-content: oklch(18% 0.02 205);
+	--color-neutral: oklch(84% 0.012 250);
+	--color-neutral-content: oklch(20% 0.02 262);
+	--color-info: oklch(70% 0.1 245);
+	--color-info-content: oklch(18% 0.02 245);
+	--color-success: oklch(70% 0.12 155);
+	--color-success-content: oklch(18% 0.02 155);
+	--color-warning: oklch(80% 0.13 75);
+	--color-warning-content: oklch(20% 0.03 75);
+	--color-error: oklch(66% 0.17 27);
+	--color-error-content: oklch(18% 0.02 27);
+	--radius-selector: 0.25rem;
+	--radius-field: 0.3rem;
+	--radius-box: 0.45rem;
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@theme {
+	--font-display: 'Alegreya SC', 'Palatino Linotype', Georgia, serif;
+	--font-sans: 'Alegreya Sans', 'Gill Sans', system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+html,
+body {
+	background: var(--color-base-200);
+	font-size: 16px;
+}
+
+h1,
+h2,
+h3 {
+	text-wrap: balance;
+}
+
+.panel {
+	@apply rounded-box border-base-300 bg-base-100 border p-3 sm:p-4;
+}
+
+.panel-title {
+	@apply font-display text-primary mb-2 text-sm font-bold tracking-wider uppercase;
+}
+
+.label-xs {
+	@apply text-base-content/60 text-[0.7rem] font-medium tracking-wider uppercase;
+}
+
+.num {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Inputs that look like ruled lines on a sheet until focused. */
+.line-input {
+	@apply border-base-300 focus:border-primary w-full border-0 border-b bg-transparent px-0.5 py-0.5 outline-none;
+}
+
+.tag {
+	@apply rounded-selector bg-base-200 text-base-content/70 inline-flex items-center px-1.5 py-0.5 text-[0.68rem] font-medium tracking-wide uppercase;
+}
+
+.desc {
+	@apply text-base-content/85 text-[0.95rem] leading-snug;
+	max-width: 72ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		transition: none !important;
+		animation: none !important;
+	}
+}
