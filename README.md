@@ -46,7 +46,9 @@ Load a pack from **Packs → Load pack file**. Packs are saved in your browser a
 			]
 		}
 	],
-	"feats": { "my-feat": { "name": "My Feat", "cat": "general", "abilities": ["str", "dex"], "d": "…" } },
+	"feats": {
+		"my-feat": { "name": "My Feat", "cat": "general", "abilities": ["str", "dex"], "d": "…" }
+	},
 	"spells": [],
 	"species": {},
 	"backgrounds": {},

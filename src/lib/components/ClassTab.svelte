@@ -54,7 +54,7 @@
 
 	{#if resources.length}
 		<section class="panel" aria-labelledby="res-h">
-			<h2 id="res-h" class="panel-title">Resources</h2>
+			<h2 id="res-h" class="panel-title">Limited uses <span class="text-base-content/50 font-sans text-xs font-normal tracking-normal normal-case">tick them off on the printed sheet</span></h2>
 			<ul class="grid gap-x-6 md:grid-cols-2">
 				{#each resources as f (f.key)}
 					<li><FeatureCard {f} compact /></li>

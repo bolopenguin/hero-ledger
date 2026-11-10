@@ -66,6 +66,13 @@ export interface PdfImport {
 	changedFields: number;
 }
 
+/** The character data embedded in an exported PDF (including the field map). */
+export async function readEmbedded(bytes: ArrayBuffer): Promise<EmbeddedData | null> {
+	const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+	const file = attachments(doc).find((a) => a.name === PDF_DATA_NAME);
+	return file ? (JSON.parse(new TextDecoder().decode(file.bytes)) as EmbeddedData) : null;
+}
+
 export async function readPdf(bytes: ArrayBuffer): Promise<PdfImport> {
 	let doc: PDFDocument;
 	try {

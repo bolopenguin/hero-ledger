@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Moon, Sun, Minus, Plus } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
 	import {
 		armorClass,
@@ -21,11 +20,9 @@
 	import { CLASSES } from '$lib/data/classes';
 	import { AB_NAMES, ALIGNMENTS, BACKGROUNDS, SKILLS, SPECIES } from '$lib/data/srd';
 	import { allPackBackgrounds, allPackSpecies, packSubclasses } from '$lib/packs.svelte';
-	import { longRest, shortRest } from '$lib/rest';
 	import { ABILITIES, type Ab } from '$lib/types';
 	import Stat from './Stat.svelte';
 	import RightNow from './RightNow.svelte';
-	import Pips from './Pips.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -42,19 +39,6 @@
 	const pBgs = $derived(allPackBackgrounds());
 	const pp = $derived(10 + (sk.perception?.value ?? 0) + (ch.bonus.pp ?? 0));
 
-	let hpDelta = $state(5);
-	let restMsg = $state('');
-
-	function damage(n: number) {
-		let rest = n;
-		const fromTemp = Math.min(ch.hp.temp, rest);
-		ch.hp.temp -= fromTemp;
-		rest -= fromTemp;
-		ch.hp.current = Math.max(0, ch.hp.current - rest);
-	}
-	function heal(n: number) {
-		ch.hp.current = Math.min(maxHp, ch.hp.current + n);
-	}
 	// Cycle what the player sees: none -> proficient -> expertise. Background skills are
 	// always at least proficient, so for them the click toggles expertise on and off.
 	function cycleSkill(id: string) {
@@ -68,15 +52,7 @@
 		else ch.bgAsi = {};
 	}
 	const bgPoints = $derived(Object.values(ch.bgAsi).reduce((a, b) => a + (b ?? 0), 0));
-	function rest(kind: 'short' | 'long') {
-		if (kind === 'short') shortRest(ch);
-		else longRest(ch);
-		restMsg = kind === 'short' ? 'Short Rest taken: short-rest uses restored.' : 'Long Rest taken: HP, slots, hit dice and uses restored.';
-		setTimeout(() => (restMsg = ''), 3500);
-	}
-	const exhaustionText = $derived(
-		ch.exhaustion ? `−${2 * ch.exhaustion} to D20 Tests, −${5 * ch.exhaustion} ft Speed${ch.exhaustion >= 6 ? ' — dead' : ''}` : 'No effects'
-	);
+
 	const training = $derived(extraTraining(ch));
 	const armorTraining = $derived(
 		[...(cls?.armor ?? []), ...training.armor]
@@ -284,53 +260,15 @@
 				</p>
 			{/if}
 
-			<div class="border-base-300 mt-3 grid gap-3 border-t pt-3 sm:grid-cols-[1.3fr_1fr]">
-				<div>
-					<div class="flex items-end gap-3">
-						<label class="flex flex-col">
-							<span class="label-xs">Current HP</span>
-							<input id="hp-current" type="number" class="input input-lg num w-24 text-center text-2xl" bind:value={ch.hp.current} />
-						</label>
-						<Stat label="Max HP" value={maxHp} key="hpMax" />
-						<label class="flex flex-col">
-							<span class="label-xs">Temp</span>
-							<input id="hp-temp" type="number" min="0" class="input num w-16 text-center" bind:value={ch.hp.temp} />
-						</label>
-					</div>
-					<div class="mt-2 flex items-center gap-1.5">
-						<button type="button" class="btn btn-sm btn-error btn-outline" onclick={() => damage(hpDelta)}><Minus class="size-3.5" /> Damage</button>
-						<input type="number" min="0" class="input input-sm num w-16 text-center" bind:value={hpDelta} aria-label="Amount" />
-						<button type="button" class="btn btn-sm btn-success btn-outline" onclick={() => heal(hpDelta)}><Plus class="size-3.5" /> Heal</button>
-					</div>
-					{#if ch.hp.current <= maxHp / 2 && ch.hp.current > 0}<p class="text-warning mt-1 text-xs font-semibold">Bloodied</p>{/if}
+			<div class="border-base-300 mt-3 flex flex-wrap items-end gap-x-8 gap-y-2 border-t pt-3">
+				<Stat label="Max HP" value={maxHp} key="hpMax" />
+				<div class="flex flex-col items-center">
+					<span class="label-xs">Hit dice</span>
+					<span class="num text-lg">{ch.level} × d{cls?.hd ?? 8}</span>
 				</div>
-				<div class="flex flex-col gap-2 text-sm">
-					<div>
-						<span class="label-xs">Hit dice d{cls?.hd ?? 8} spent</span>
-						<div><Pips max={ch.level} bind:used={ch.hitDiceUsed} label="Hit dice" /></div>
-					</div>
-					<div class="flex gap-4">
-						<div><span class="label-xs">Death saves ✓</span><div><Pips max={3} bind:used={ch.death.s} label="Successes" /></div></div>
-						<div><span class="label-xs">✗</span><div><Pips max={3} bind:used={ch.death.f} label="Failures" /></div></div>
-					</div>
-				</div>
-			</div>
-
-			<div class="border-base-300 mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 text-sm">
-				<label class="flex items-center gap-2">
-					<input type="checkbox" class="toggle toggle-sm toggle-secondary" bind:checked={ch.inspiration} />
-					Heroic Inspiration
-				</label>
-				<label class="flex items-center gap-2">
-					<span>Exhaustion</span>
-					<select class="select select-xs w-14" bind:value={ch.exhaustion}>{#each [0, 1, 2, 3, 4, 5, 6] as n (n)}<option value={n}>{n}</option>{/each}</select>
-					<span class="text-base-content/60 text-xs">{exhaustionText}</span>
-				</label>
-				<span class="ml-auto flex gap-2">
-					<button type="button" class="btn btn-sm" onclick={() => rest('short')}><Sun class="size-4" /> Short rest</button>
-					<button type="button" class="btn btn-sm" onclick={() => rest('long')}><Moon class="size-4" /> Long rest</button>
-				</span>
-				{#if restMsg}<p role="status" class="text-success w-full text-xs">{restMsg}</p>{/if}
+				<p class="text-base-content/60 max-w-md text-xs">
+					Current and temporary HP, hit dice spent, death saves, Heroic Inspiration and Exhaustion are printed empty on the PDF, to fill in during play.
+				</p>
 			</div>
 		</section>
 

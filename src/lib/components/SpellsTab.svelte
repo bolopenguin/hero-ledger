@@ -8,7 +8,6 @@
 	import { allPackSpells } from '$lib/packs.svelte';
 	import { ABILITIES, type SpellDef } from '$lib/types';
 	import Stat from './Stat.svelte';
-	import Pips from './Pips.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -111,11 +110,11 @@
 			<div class="border-base-300 mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t pt-3">
 				{#each s.slots as n, i (i)}
 					{#if n > 0}
-						<div class="flex flex-col"><span class="label-xs">Level {i + 1}</span><Pips max={n} bind:used={ch.spells.slotsUsed[i]} label="Level {i + 1} slots" /></div>
+						<div class="flex flex-col items-center"><span class="label-xs">Level {i + 1}</span><span class="num text-xl">{n}</span></div>
 					{/if}
 				{/each}
 				{#if s.pact}
-					<div class="flex flex-col"><span class="label-xs">Pact slots · level {s.pact.level}</span><Pips max={s.pact.n} bind:used={ch.spells.pactUsed} label="Pact slots" /></div>
+					<div class="flex flex-col items-center"><span class="label-xs">Pact slots · level {s.pact.level}</span><span class="num text-xl">{s.pact.n}</span></div>
 				{/if}
 			</div>
 		{:else}

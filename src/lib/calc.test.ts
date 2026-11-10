@@ -23,7 +23,7 @@ import { installPack, removePack } from './packs.svelte';
 import { avgDice, evalFormula, fillTemplate, formatDice, parseDice } from './formula';
 import { blankCharacter, newAttack, newSpell, sampleCharacter } from './store.svelte';
 import { buildPdf } from './pdf/export';
-import { readPdf } from './pdf/import';
+import { readEmbedded, readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
 import { attacksPerAction, classStats } from './classStats';
 import { turnSummary } from './turn';
@@ -131,7 +131,12 @@ describe('PDF round trip', () => {
 		const form = doc.getForm();
 		const fields = form.getFields();
 		const text = fields.filter((f) => f instanceof PDFTextField) as PDFTextField[];
-		const hp = text.find((f) => f.getText() === String(ch.hp.current))!;
+		const ab = (u: Uint8Array) =>
+			u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
+		const map = (await readEmbedded(ab(bytes)))!.fieldMap;
+		const hpName = Object.entries(map).find(([, e]) => e.path.join('.') === 'hp.current')![0];
+		const hp = form.getTextField(hpName);
+		expect(hp.getText() ?? '').toBe(''); // printed empty, to fill in at the table
 		hp.setText('31');
 		const notes = text.find((f) => f.getText() === ch.notes.backstory)!;
 		notes.setText('Rewritten at the table.');

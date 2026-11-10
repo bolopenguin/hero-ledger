@@ -268,7 +268,18 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			.filter((st) => input.active?.[st.id])
 			.map((st) => [st.id, true])
 	);
-	const ch: Character = { ...input, active: kept };
+	// A fresh sheet: everything tracked during play is left empty to fill in on paper.
+	const ch: Character = {
+		...input,
+		active: kept,
+		used: {},
+		hp: { current: 0, temp: 0 },
+		hitDiceUsed: 0,
+		death: { s: 0, f: 0 },
+		exhaustion: 0,
+		inspiration: false,
+		spells: { ...input.spells, slotsUsed: [0, 0, 0, 0, 0, 0, 0, 0, 0], pactUsed: 0 }
+	};
 	const doc = await PDFDocument.create();
 	doc.setTitle(`${ch.name || 'Character'} - Character Sheet`);
 	doc.setCreator('Hero Ledger');
@@ -411,7 +422,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	w.label('Hit points', colR + 6, yr - 11);
 	w.text(`max ${maxHp}`, colR + rW - 46, yr - 11, 8, w.b, MUTED);
 	w.label('Current', colR + 6, yr - 24);
-	w.field(['hp', 'current'], 'number', ch.hp.current, colR + 6, yr - 64, rW * 0.55, 36, {
+	w.field(['hp', 'current'], 'number', '', colR + 6, yr - 64, rW * 0.55, 36, {
 		size: 20,
 		align: 'center'
 	});
@@ -442,7 +453,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	w.check(['inspiration'], ch.inspiration, colR, yr - 9);
 	w.text('Heroic Inspiration', colR + 12, yr - 8, 8.5, w.b);
 	w.label('Exhaustion', colR + 108, yr - 8);
-	w.field(['exhaustion'], 'number', ch.exhaustion, colR + 152, yr - 12, 22, 12, {
+	w.field(['exhaustion'], 'number', '', colR + 152, yr - 12, 22, 12, {
 		align: 'center'
 	});
 	yr -= 22;

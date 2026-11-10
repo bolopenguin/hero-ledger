@@ -5,7 +5,6 @@
 	import { fillTemplate } from '$lib/formula';
 	import { ACTION_LABELS, AB_NAMES } from '$lib/data/srd';
 	import { ABILITIES, type ActionType, type PickKind, type Recharge } from '$lib/types';
-	import Pips from './Pips.svelte';
 
 	let { f, compact = false }: { f: RFeature; compact?: boolean } = $props();
 	const ch = $derived(currentChar());
@@ -87,8 +86,7 @@
 		{#if f.edited}<span class="tag !text-accent">edited</span>{/if}
 		<span class="ml-auto flex items-center gap-2">
 			{#if f.uses}
-				<Pips max={f.uses} pool={f.pool} label={f.n} bind:used={ch.used[f.key]} />
-				{#if f.r}<span class="text-base-content/55 text-xs">{rechargeLabel[f.r]}</span>{/if}
+				<span class="tag" title="Uses; tick them off on the printed sheet">{f.pool ? `${f.uses} pool` : `${f.uses}×`}{f.r ? ` · ${rechargeLabel[f.r]}` : ''}</span>
 			{/if}
 			{#if !compact}
 				<button type="button" class="btn btn-ghost btn-xs btn-square" title="Edit text or add notes" onclick={() => (editing = !editing)}><Pencil class="size-3.5" /></button>

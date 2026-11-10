@@ -742,7 +742,7 @@ export function speed(ch: Character) {
 	if (ch.classId === 'ranger' && ch.level >= 6 && armor?.type !== 'heavy') v += 10;
 	for (const f of activeFeats(ch)) v += f.def.speed ?? 0;
 	for (const st of activeStates(ch)) v += st.speed ?? 0;
-	return Math.max(0, ov(ch, 'speed', v) - 5 * ch.exhaustion);
+	return Math.max(0, ov(ch, 'speed', v));
 }
 
 export function initiative(ch: Character, sc = scores(ch)) {
