@@ -1,16 +1,75 @@
 # Hero Ledger
 
-A character sheet for D&D 2024 (the "5.5" / One D&D rules) that fills itself in.
+A character sheet for D&D 2024 (the "5.5" rules) that fills itself in, then prints as a sheet you can use at the table.
 
-- **Pick class, subclass, species and background**: features appear grouped by level, with their text, uses and recharge, all computed from your level and ability scores.
-- **Feats at the right levels**: Ability Score Improvement, Fighting Style, Origin and Epic Boon slots get a feat picker; ASIs feed back into your scores.
-- **Attacks with situational damage**: each attack shows its base hit and damage, plus _riders_ (Rage, Sneak Attack, Divine Smite, Hunter's Mark, your own…) you tick on or off to see the total, the average and the crit for that situation. Versatile weapons get a two-hands toggle; Champion crit ranges are applied.
-- **Everything can be customised**: every calculated number takes a misc bonus or a replacement value; every built-in feature can be renamed, rewritten, annotated or hidden; you can add custom features, feats, riders, a custom class, subclass, species or background. Custom text supports live formulas such as `{8 + wis + pb}`.
-- **Inventory** grouped by container, with weight, value, attunement, charges, coins and carrying capacity. Weapons become attacks in one click.
-- **PDF export and re-import**: the exported PDF is fillable (HP, uses, slots, coins, notes…) and carries the full character inside it. Load it back with **Open** and anything typed into the PDF fields is picked up.
-- **Content packs**: JSON files that add subclasses, feats, species or backgrounds (see below).
+The web app does the bookkeeping; the printed PDF is what you play with.
 
-Characters are stored in the browser (localStorage) and in the files you save. There is no server.
+## What it does
+
+- **Build a character**: pick class, subclass, species and background. Features appear level by level, with their text, uses and recharge worked out from your level and ability scores.
+- **Make your choices**: ability scores or a feat at each ASI level, fighting styles, Weapon Mastery, Expertise, and class options such as Divine Order or Circle of the Land. Choices change the numbers: training, skills, cantrips, damage riders.
+- **Class tab**: the key numbers of your class (Rage, Sneak Attack, Focus Points, Sorcery Points, Pact slots…), every limited-use feature, and what you still have to choose.
+- **Attacks**: hit and damage for each weapon or spell attack, plus extra damage that applies only sometimes (Sneak Attack, Divine Smite, your own) with averages and crits.
+- **"Right now" switches** for situational effects (Rage, Unarmored, Mage Armor, Hunter's Mark, Haste…): flip one and AC, damage, speed or spell DC follow.
+- **Your turn**: what you can do as an Action, Bonus Action and Reaction, built from your attacks, spells, features and items.
+- **Spells**: spell slots, DC and attack; spells your features give you are filled in and labelled (always prepared, free once per rest, at will, ritual only).
+- **Inventory**: an equipment catalog with cost, weight and what each item does, one-click starting equipment, containers, attunement, coins and carrying capacity.
+- **Everything can be customised**: every calculated number takes a bonus or a replacement value, every feature can be reworded, annotated or hidden, and you can add your own features, feats, riders, class, subclass, species or background. Custom text supports live formulas such as `{8 + wis + pb}`.
+- **PDF export and re-import**: a fillable PDF (HP, uses, slots, coins, notes…) that carries the whole character inside it. Load it back with **Open** and anything typed into its fields is picked up.
+
+Characters are stored in your browser and in the files you save. There is no server.
+
+## Add your own content
+
+The built-in rules are the free D&D 2024 rules (System Reference Document 5.2). You can add more with **content packs**: JSON files with subclasses, spells, feats, species, backgrounds and option lists (invocations, metamagic, maneuvers…). Use them for homebrew, house rules, or any material you have the right to use.
+
+Load a pack from **Packs → Load pack file**. Packs are saved in your browser and travel inside the PDFs and character files you export, so a character opens correctly on another device. When you run the app locally, any pack in `content-packs/local/` is installed automatically.
+
+```json
+{
+	"id": "my-pack",
+	"name": "My homebrew",
+	"subclasses": [
+		{
+			"id": "storm-warden",
+			"class": "fighter",
+			"name": "Storm Warden",
+			"features": [
+				{
+					"l": 3,
+					"n": "Thunder Strike",
+					"a": "special",
+					"u": "max(1, con)",
+					"r": "short",
+					"d": "Once per turn on a weapon hit, deal +1d8 Thunder damage."
+				}
+			]
+		}
+	],
+	"feats": { "my-feat": { "name": "My Feat", "cat": "general", "abilities": ["str", "dex"], "d": "…" } },
+	"spells": [],
+	"species": {},
+	"backgrounds": {},
+	"options": {}
+}
+```
+
+Features:
+
+- `l` level, `n` name, `d` description, `a` one of `action`, `bonus`, `reaction`, `special`, `passive`.
+- `u` uses: a number or formula (`lvl`, `pb`, `str`…`cha` modifiers, `min`, `max`, `floor`, `ceil`, comparisons like `lvl >= 5`).
+- `r` recharge: `short`, `short1` (one use per Short Rest, all per Long Rest) or `long`.
+- `{formula}` inside `d` is replaced with the computed number.
+- `spells`: spells the feature gives, e.g. `[{ "l": 3, "names": ["Shield"], "kind": "prepared" }]` (`kind`: `prepared`, `free`, `atwill`, `ritual`).
+- `choose`: let the player pick from an option list, e.g. `{ "list": "maneuvers", "count": "3" }`.
+
+Subclasses that add spellcasting to a non-caster can set `caster` (`third`), `castAbil`, `spellList`, `cantrips` and `prepared` (20 numbers, one per class level).
+
+Spells: `name`, `level` (0 for cantrips), `school`, `time`, `range`, `comp`, `duration`, `conc`, `ritual`, `classes`, `d`, and optionally `higher`, `material`, `cost` (GP) and `consumed`.
+
+Feats: `name`, `cat` (`origin`, `general`, `style`, `epic`), `d`, and optionally `prereq`, `abilities` (which scores the +1 can raise), `u`/`r`/`a` for uses, `hp`, `hpFlat`, `speed`, `saveFromAsi` and a damage `rider`.
+
+`scripts/build-pack.mjs` merges a folder of pieces (subclass files, `spells*.json`, `feats*.json`, `options*.json`…) into one pack file.
 
 ## Develop
 
@@ -32,48 +91,6 @@ It is a static SvelteKit site (`@sveltejs/adapter-static`), so any static host w
 **Netlify**: connect the repository; `netlify.toml` already sets `yarn build` and the `build` folder. Or drag the `build/` folder into Netlify Drop.
 
 GitHub Pages, Cloudflare Pages and Vercel work the same way: build command `yarn build`, output `build`.
-
-## Content packs
-
-A pack is a JSON file loaded from **Packs → Load pack file**:
-
-```json
-{
-	"id": "my-pack",
-	"name": "My pack",
-	"subclasses": [
-		{
-			"id": "storm-warden",
-			"class": "fighter",
-			"name": "Storm Warden",
-			"features": [
-				{
-					"l": 3,
-					"n": "Thunder Strike",
-					"a": "special",
-					"u": "max(1, con)",
-					"r": "short",
-					"d": "+1d8 Thunder once per turn."
-				}
-			]
-		}
-	],
-	"feats": { "my-feat": { "name": "My Feat", "cat": "general", "d": "…" } },
-	"species": {},
-	"backgrounds": {}
-}
-```
-
-- `l` level, `n` name, `d` description, `a` one of `action`, `bonus`, `reaction`, `special`, `passive`.
-- `u` uses: a number or formula (`lvl`, `pb`, `str`…`cha` modifiers, `min`, `max`, `floor`, `ceil`).
-- `r` recharge: `short`, `short1` (one use per Short Rest, all per Long Rest) or `long`.
-- `{formula}` inside `d` is replaced with the computed number.
-- A subclass that adds spellcasting to a non-caster (Eldritch Knight, Arcane Trickster) can set `"caster": "third"`, `"castAbil": "int"`, `"spellList": "wizard"`, `"cantrips": [[3, 2], [10, 3]]` and `"prepared"` (20 numbers, one per class level).
-- `spells` is an array of spells: `name`, `level` (0 for cantrips), `school`, `time`, `range`, `comp`, `duration`, `conc`, `ritual`, `classes`, `d`, and optionally `higher`, `material`, `cost` (GP) and `consumed`. They appear in the Spells tab search, filtered by your spell list and the levels you can cast.
-- `scripts/build-pack.mjs` merges a folder of pieces (subclass files, `spells*.json`, `feats.json`…) into one pack file.
-
-Packs travel inside exported PDFs and character files, so a character opens correctly on another device.
-
 
 ## Legal
 
