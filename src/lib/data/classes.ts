@@ -438,6 +438,7 @@ export const CLASSES: Record<string, ClassDef> = {
 					`Divine Strike becomes 2d8. Potent Spellcasting: when a cantrip deals damage, you or a creature within 60 ft gains ${2 * Math.max(1, c.m('wis'))} Temporary HP.`
 			},
 			ASI(16),
+			SUB(17, 'Cleric'),
 			BOON,
 			{
 				l: 20,

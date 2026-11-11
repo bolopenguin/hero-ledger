@@ -5,6 +5,7 @@ import {
 	attack,
 	features,
 	grantedSpells,
+	hitText,
 	masteredWeapons,
 	scores,
 	signed,
@@ -161,7 +162,16 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 		if (seen.has(key)) return;
 		seen.add(key);
 		const slot = slotOfTime(time);
+		const atk = ch.attacks.filter(
+			(a) => a.kind === 'spell' && (a.spell ?? a.name).toLowerCase() === key
+		);
 		out[slot].push({
+			lines: atk.length
+				? atk.map((a) => {
+						const r = attack(ch, a, sc);
+						return `${hitText(a, r)}, ${r.total} ${r.types || a.type}${a.notes ? ` (${a.notes})` : ''}`;
+					})
+				: undefined,
 			name,
 			detail:
 				`${level === 0 ? 'Cantrip' : `Level ${level}`}${range ? `, ${range}` : ''}${conc ? ', Concentration' : ''}${slot === 'reaction' || slot === 'long' ? ` (${time})` : ''}. ${d}`.trim(),
@@ -210,13 +220,20 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 	}
 
 	// ---- Once-per-turn damage you can add (not tied to a switch)
-	for (const r of allRiders(ch, sc))
-		if (!r.state && r.dmg)
-			out.onhit.push({
-				name: r.name,
-				detail: `+${r.dmg}${r.type ? ` ${r.type}` : ''}. ${r.when}`,
-				source: r.auto ? 'Class' : 'Custom'
-			});
+	for (const r of allRiders(ch, sc)) {
+		if (r.state || !r.dmg) continue;
+		// A feature of the same name (Brutal Strike, Sneak Attack…) already explains it: just add the damage.
+		const same = out.onhit.find((e) => e.name === r.name);
+		if (same) {
+			same.detail = `+${r.dmg}${r.type ? ` ${r.type}` : ''}. ${same.detail}`;
+			continue;
+		}
+		out.onhit.push({
+			name: r.name,
+			detail: `+${r.dmg}${r.type ? ` ${r.type}` : ''}. ${r.when}`,
+			source: r.auto ? 'Class' : 'Custom'
+		});
+	}
 
 	// ---- Items
 	for (const it of ch.gear.items) {

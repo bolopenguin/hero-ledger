@@ -93,15 +93,15 @@ h3 {
 }
 
 .panel {
-	@apply rounded-box border-base-300 bg-base-100 border p-3 sm:p-4;
+	@apply rounded-box border border-base-300 bg-base-100 p-3 sm:p-4;
 }
 
 .panel-title {
-	@apply font-display text-primary mb-2 text-sm font-bold tracking-wider uppercase;
+	@apply mb-2 font-display text-sm font-bold tracking-wider text-primary uppercase;
 }
 
 .label-xs {
-	@apply text-base-content/60 text-[0.7rem] font-medium tracking-wider uppercase;
+	@apply text-[0.7rem] font-medium tracking-wider text-base-content/60 uppercase;
 }
 
 .num {
@@ -111,15 +111,15 @@ h3 {
 
 /* Inputs that look like ruled lines on a sheet until focused. */
 .line-input {
-	@apply border-base-300 focus:border-primary w-full border-0 border-b bg-transparent px-0.5 py-0.5 outline-none;
+	@apply w-full border-0 border-b border-base-300 bg-transparent px-0.5 py-0.5 outline-none focus:border-primary;
 }
 
 .tag {
-	@apply rounded-selector bg-base-200 text-base-content/70 inline-flex items-center px-1.5 py-0.5 text-[0.68rem] font-medium tracking-wide uppercase;
+	@apply inline-flex items-center rounded-selector bg-base-200 px-1.5 py-0.5 text-[0.68rem] font-medium tracking-wide text-base-content/70 uppercase;
 }
 
 .desc {
-	@apply text-base-content/85 text-[0.95rem] leading-snug;
+	@apply text-[0.95rem] leading-snug text-base-content/85;
 	max-width: 72ch;
 }
 

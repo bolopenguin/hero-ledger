@@ -1,6 +1,6 @@
 // Key numbers for each class, shown at the top of the Class tab (D&D 2024 rules).
 import { by } from './data/classes';
-import { makeCtx, scores, signed, spellcasting } from './calc';
+import { chosenOptions, makeCtx, scores, signed, spellcasting } from './calc';
 import type { Character } from './types';
 
 export interface ClassStat {
@@ -23,6 +23,12 @@ export function attacksPerAction(ch: Character): number {
 		]);
 	if (['barbarian', 'monk', 'paladin', 'ranger'].includes(ch.classId) && l >= 5) return 2;
 	if (ch.classId === 'bard' && sub(ch, 'valor') && l >= 6) return 2;
+	if (ch.classId === 'warlock' && l >= 5) {
+		// Thirsting Blade / Devouring Blade: extra attacks with the pact weapon.
+		const picked = new Set(chosenOptions(ch).map((o) => o.key));
+		if (picked.has('devouring-blade')) return 3;
+		if (picked.has('thirsting-blade')) return 2;
+	}
 	return 1;
 }
 

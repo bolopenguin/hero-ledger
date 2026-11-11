@@ -190,6 +190,10 @@ export interface Attack {
 	notes: string;
 	/** Rider id -> active. */
 	riders: Record<string, boolean>;
+	/** The target makes this saving throw instead of you rolling to hit (Sacred Flame, Burning Hands…). */
+	save?: Ab | '';
+	/** Spell this attack was made from, so it can be kept in sync. */
+	spell?: string;
 }
 
 export interface Rider {

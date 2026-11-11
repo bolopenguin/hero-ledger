@@ -7,6 +7,8 @@ import {
 	extraTraining,
 	masteredWeapons,
 	attack,
+	attackFromSpell,
+	hitText,
 	autoRiders,
 	features,
 	grantedSpells,
@@ -493,5 +495,93 @@ describe('advantage and disadvantage', () => {
 		expect(advForSkill(advantages(ch), 'stealth').some((e) => e.mode === 'dis')).toBe(false);
 		ch.advCustom = [{ id: 'x', target: 'perception', mode: 'adv', cond: '' }];
 		expect(advMarker(advForSkill(advantages(ch), 'perception'))?.text).toBe('ADV');
+	});
+});
+
+describe('class structure', () => {
+	it('every subclass level has a slot in the class features', () => {
+		for (const [id, cls] of Object.entries(CLASSES)) {
+			const slots = cls.features.filter((f) => f.subslot).map((f) => f.l);
+			expect(slots, id).toEqual(cls.subLevels);
+		}
+	});
+	it('gives the Life Domain its level 17 feature', () => {
+		const ch = blankCharacter();
+		ch.classId = 'cleric';
+		ch.subclassId = 'srd';
+		ch.level = 17;
+		expect(features(ch).some((f) => f.n === 'Supreme Healing')).toBe(true);
+	});
+});
+
+describe('spell attacks', () => {
+	const fireBolt = {
+		name: 'Fire Bolt',
+		level: 0,
+		school: 'Evocation',
+		time: 'Action',
+		range: '120 feet',
+		comp: 'V, S',
+		duration: 'Instantaneous',
+		conc: false,
+		ritual: false,
+		classes: ['Wizard'],
+		d: 'Ranged spell attack: 1d10 Fire.',
+		higher: '2d10 at level 5, 3d10 at 11, 4d10 at 17.'
+	};
+	it('scales cantrip dice with level and uses the spell attack bonus', () => {
+		const ch = blankCharacter();
+		ch.classId = 'wizard';
+		ch.level = 11;
+		ch.abilities.int = 16;
+		const a = newAttack(attackFromSpell(ch, fireBolt)!);
+		const r = attack(ch, a);
+		expect(r.base).toBe('3d10');
+		expect(r.toHit).toBe(3 + 4);
+		expect(a.range).toBe('120 ft');
+	});
+	it('shows a save DC for save spells', () => {
+		const ch = blankCharacter();
+		ch.classId = 'cleric';
+		ch.level = 5;
+		ch.abilities.wis = 16;
+		const d = {
+			...fireBolt,
+			name: 'Sacred Flame',
+			d: 'Dex save or 1d8 Radiant.',
+			higher: '2d8 at level 5.'
+		};
+		const a = newAttack(attackFromSpell(ch, d)!);
+		const r = attack(ch, a);
+		expect(a.save).toBe('dex');
+		expect(r.dc).toBe(8 + 3 + 3);
+		expect(hitText(a, r)).toBe('DC 14 Dex save');
+		expect(r.base).toBe('2d8');
+	});
+	it('skips spells without damage', () => {
+		const ch = blankCharacter();
+		expect(attackFromSpell(ch, { ...fireBolt, d: 'Whisper a message.' })).toBeNull();
+	});
+});
+
+describe('warlock pact weapon', () => {
+	it('Thirsting Blade gives a second attack', () => {
+		const ch = blankCharacter();
+		ch.classId = 'warlock';
+		ch.level = 5;
+		installPack({
+			id: 'inv-test',
+			name: 'Invocations',
+			options: {
+				invocations: {
+					label: 'Invocations',
+					items: { 'thirsting-blade': { name: 'Thirsting Blade', d: 'Extra Attack', l: 5 } }
+				}
+			}
+		});
+		const key = features(ch).find((f) => f.choose?.list === 'invocations')!.key;
+		ch.choices[key] = ['thirsting-blade'];
+		expect(attacksPerAction(ch)).toBe(2);
+		removePack('inv-test');
 	});
 });

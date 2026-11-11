@@ -37,6 +37,7 @@ import {
 	type OptionItem,
 	type OptionList,
 	type SpeciesDef,
+	type SpellDef,
 	type SpellGrant,
 	type SpellKind
 } from './types';
@@ -969,6 +970,8 @@ export interface AttackResult {
 	critOn: number;
 	types: string;
 	riders: { r: Rider; on: boolean; terms: DiceTerm[] | null }[];
+	/** Save DC when the target saves instead of being attacked. */
+	dc: number | null;
 	error: string;
 }
 
@@ -1015,6 +1018,11 @@ export function attack(ch: Character, a: Attack, sc = scores(ch)): AttackResult 
 	let critOn = 20;
 	if (ch.classId === 'fighter' && ch.subclassId === 'srd')
 		critOn = ch.level >= 15 ? 18 : ch.level >= 3 ? 19 : 20;
+	const dc = a.save
+		? a.kind === 'spell'
+			? spellcasting(ch, sc).dc
+			: 8 + m + c.pb + a.magic + a.hitMisc
+		: null;
 	return {
 		ability,
 		toHit: hit,
@@ -1026,6 +1034,91 @@ export function attack(ch: Character, a: Attack, sc = scores(ch)): AttackResult 
 		critOn,
 		types: [...types].join(', '),
 		riders,
+		dc,
 		error
+	};
+}
+
+/** "+5 to hit" or "DC 13 Dex save". */
+export function hitText(a: Attack, r: AttackResult): string {
+	return r.dc !== null && a.save
+		? `DC ${r.dc} ${a.save[0].toUpperCase()}${a.save.slice(1)} save`
+		: `${signed(r.toHit)} to hit`;
+}
+
+const DMG_TYPES =
+	'Acid|Bludgeoning|Cold|Fire|Force|Lightning|Necrotic|Piercing|Poison|Psychic|Radiant|Slashing|Thunder';
+const SAVE_ABS: Record<string, Ab> = {
+	str: 'str',
+	dex: 'dex',
+	con: 'con',
+	int: 'int',
+	wis: 'wis',
+	cha: 'cha'
+};
+
+/** Whether a spell's summary describes damage the sheet can turn into an attack line. */
+export function spellDamage(def: SpellDef) {
+	const roll = /spell attack/i.test(def.d);
+	const sv = def.d.match(/\b(Str|Dex|Con|Int|Wis|Cha)\w*\s+sav/i);
+	if (!roll && !sv) return null;
+	const m = def.d.match(new RegExp(`(\\d+)d(\\d+)(?:\\s*\\+\\s*(\\d+))?(?:\\s+(${DMG_TYPES}))?`));
+	if (!m) return null;
+	return {
+		n: Number(m[1]),
+		d: Number(m[2]),
+		flat: m[3] ? Number(m[3]) : 0,
+		type: m[4] ?? '',
+		save: roll ? ('' as const) : SAVE_ABS[sv![1].toLowerCase()]
+	};
+}
+
+/** Build an attack line from a spell: cantrip dice grow with level, save spells show a DC. */
+export function attackFromSpell(ch: Character, def: SpellDef): Partial<Attack> | null {
+	const dmg = spellDamage(def);
+	if (!dmg) return null;
+	const beams = /beam/i.test(def.higher ?? '');
+	const scales = def.level === 0 && !beams && /level 5|levels 5/i.test(def.higher ?? '');
+	const dice = scales
+		? `{${dmg.n} * (1 + (lvl >= 5) + (lvl >= 11) + (lvl >= 17))}d${dmg.d}`
+		: `${dmg.n}d${dmg.d}`;
+	const picked = new Set(chosenOptions(ch).map((o) => o.key));
+	const notes: string[] = [];
+	let addMod = false;
+	if (beams) {
+		const n = by(ch.level, [
+			[1, 1],
+			[5, 2],
+			[11, 3],
+			[17, 4]
+		]);
+		notes.push(`${n} beam${n > 1 ? 's' : ''}, each a separate attack roll`);
+	}
+	if (/^eldritch blast$/i.test(def.name) && picked.has('agonizing-blast')) {
+		addMod = true;
+		notes.push('Agonizing Blast adds your Charisma');
+	}
+	if (
+		def.level === 0 &&
+		ch.classId === 'cleric' &&
+		ch.level >= 7 &&
+		picked.has('potent-spellcasting')
+	) {
+		addMod = true;
+		notes.push('Potent Spellcasting adds your Wisdom');
+	}
+	if (def.level > 0)
+		notes.push(`Level ${def.level} spell${def.higher ? `; higher levels: ${def.higher}` : ''}`);
+	return {
+		name: def.name,
+		kind: 'spell',
+		spell: def.name,
+		dice,
+		dmgMisc: dmg.flat ? String(dmg.flat) : '',
+		type: dmg.type,
+		addMod,
+		save: dmg.save,
+		range: def.range.replace(/\bfeet\b/gi, 'ft').replace(/\bfoot\b/gi, 'ft'),
+		notes: notes.join('. ')
 	};
 }

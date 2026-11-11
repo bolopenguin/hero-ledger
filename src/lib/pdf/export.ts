@@ -23,7 +23,7 @@ import {
 	spellcasting,
 	subclassName
 } from '../calc';
-import { availableStates, grantedSpells, SPELL_KIND_LABEL, stateCtx } from '../calc';
+import { availableStates, grantedSpells, hitText, SPELL_KIND_LABEL, stateCtx } from '../calc';
 import { classStats } from '../classStats';
 import { advantages, advForSave, advForSkill, advLabel, advMarker } from '../advantage';
 import { turnSummary, TURN_HINT, TURN_LABEL, type TurnSlot } from '../turn';
@@ -514,8 +514,8 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.y -= 13;
 		w.text(a.name || 'Attack', M, w.y, 10, w.b);
 		const hitX = M + 150;
-		w.text(`${signed(r.toHit)} to hit`, hitX, w.y, 10, w.b, ACCENT);
-		w.text(`${r.base} ${a.type}`, hitX + 62, w.y, 9.5);
+		w.text(hitText(a, r), hitX, w.y, r.dc !== null ? 8.5 : 10, w.b, ACCENT);
+		w.text(`${r.base} ${a.type}`, hitX + (r.dc !== null ? 80 : 62), w.y, 9.5);
 		const extra = [
 			a.mastery && `Mastery: ${a.mastery}`,
 			a.range && `Range ${a.range}`,

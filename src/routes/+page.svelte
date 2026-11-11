@@ -1,18 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { FileDown, FileUp, Braces, Plus, Copy, Trash2, Package, SunMoon, X } from 'lucide-svelte';
 	import {
-		FileDown,
-		FileUp,
-		Braces,
-		Plus,
-		Copy,
-		Trash2,
-		Package,
-		SunMoon,
-		X
-	} from 'lucide-svelte';
-	import { app, addCharacter, blankCharacter, deleteCharacter, initStore, normalize, persist, uid } from '$lib/store.svelte';
-	import { EXAMPLE_PACK, initPacks, installPack, loadDevPacks, packs, packsUsedBy, removePack, validatePack, type ContentPack } from '$lib/packs.svelte';
+		app,
+		addCharacter,
+		blankCharacter,
+		deleteCharacter,
+		initStore,
+		normalize,
+		persist,
+		uid
+	} from '$lib/store.svelte';
+	import {
+		EXAMPLE_PACK,
+		initPacks,
+		installPack,
+		loadDevPacks,
+		packs,
+		packsUsedBy,
+		removePack,
+		validatePack,
+		type ContentPack
+	} from '$lib/packs.svelte';
 	import { currentChar } from '$lib/current.svelte';
 	import { getClass, subclassName } from '$lib/calc';
 	import SheetTab from '$lib/components/SheetTab.svelte';
@@ -94,7 +103,11 @@
 		}
 	}
 	function fileName(ext: string) {
-		const base = (ch?.name || 'character').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'character';
+		const base =
+			(ch?.name || 'character')
+				.replace(/[^\w\- ]+/g, '')
+				.trim()
+				.replace(/\s+/g, '-') || 'character';
 		return `${base}-lvl${ch?.level ?? 1}.${ext}`;
 	}
 	function download(data: BlobPart, name: string, type: string) {
@@ -109,7 +122,12 @@
 	}
 	function usedPacks(): ContentPack[] {
 		if (!ch) return [];
-		return packsUsedBy([ch.subclassId, ch.speciesId, ch.backgroundId, ...Object.values(ch.picks).map((p) => p.feat)]);
+		return packsUsedBy([
+			ch.subclassId,
+			ch.speciesId,
+			ch.backgroundId,
+			...Object.values(ch.picks).map((p) => p.feat)
+		]);
 	}
 
 	async function exportPdf() {
@@ -129,13 +147,19 @@
 	}
 	function exportJson() {
 		if (!ch) return;
-		const data = { app: 'hero-ledger', version: 1, character: $state.snapshot(ch), packs: usedPacks() };
+		const data = {
+			app: 'hero-ledger',
+			version: 1,
+			character: $state.snapshot(ch),
+			packs: usedPacks()
+		};
 		download(JSON.stringify(data, null, 2), fileName('json'), 'application/json');
 		say('Character file saved.');
 	}
 
 	function adopt(raw: unknown, packsIn: ContentPack[] = []) {
-		for (const p of packsIn) if (!packs.list.some((x) => x.id === p.id)) installPack(validatePack(p));
+		for (const p of packsIn)
+			if (!packs.list.some((x) => x.id === p.id)) installPack(validatePack(p));
 		const c = normalize(raw);
 		const existing = app.chars.findIndex((x) => x.id === c.id);
 		if (existing >= 0) {
@@ -158,7 +182,9 @@
 				const { readPdf } = await import('$lib/pdf/import');
 				const r = await readPdf(await file.arrayBuffer());
 				const how = adopt(r.character, r.packs);
-				say(`${r.character.name || 'Character'} ${how} from PDF (${r.changedFields} form fields read).`);
+				say(
+					`${r.character.name || 'Character'} ${how} from PDF (${r.changedFields} form fields read).`
+				);
 			} else {
 				const data = JSON.parse(await file.text());
 				if (data?.app === 'hero-ledger' && data.character) {
@@ -188,7 +214,11 @@
 	}
 	function duplicate() {
 		if (!ch) return;
-		const c = normalize({ ...$state.snapshot(ch), id: uid(), name: (ch.name || 'Character') + ' (copy)' });
+		const c = normalize({
+			...$state.snapshot(ch),
+			id: uid(),
+			name: (ch.name || 'Character') + ' (copy)'
+		});
 		addCharacter(c);
 		say('Copy created.');
 	}
@@ -209,44 +239,105 @@
 </svelte:head>
 
 {#if ready && ch}
-	<header class="border-base-300 bg-base-100 sticky top-0 z-40 border-b">
+	<header class="sticky top-0 z-40 border-b border-base-300 bg-base-100">
 		<div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2">
-			<a href="#sheet" class="font-display text-primary flex items-center gap-2 text-xl font-bold" onclick={() => setTab('sheet')}>
-				<svg viewBox="0 0 32 32" class="size-6" aria-hidden="true"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="currentColor" /><path d="M16 7 24.5 21h-17z" fill="none" stroke="var(--color-base-100)" stroke-width="2" /></svg>
+			<a
+				href="#sheet"
+				class="flex items-center gap-2 font-display text-xl font-bold text-primary"
+				onclick={() => setTab('sheet')}
+			>
+				<svg viewBox="0 0 32 32" class="size-6" aria-hidden="true"
+					><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="currentColor" /><path
+						d="M16 7 24.5 21h-17z"
+						fill="none"
+						stroke="var(--color-base-100)"
+						stroke-width="2"
+					/></svg
+				>
 				Hero Ledger
 			</a>
-			<select class="select select-sm max-w-64 min-w-0 flex-1 sm:flex-none" bind:value={app.currentId} aria-label="Character">
+			<select
+				class="select max-w-64 min-w-0 flex-1 select-sm sm:flex-none"
+				bind:value={app.currentId}
+				aria-label="Character"
+			>
 				{#each app.chars as c (c.id)}
-					<option value={c.id}>{c.name || 'Unnamed hero'} · {getClass(c)?.name ?? ''} {c.level}</option>
+					<option value={c.id}
+						>{c.name || 'Unnamed hero'} · {getClass(c)?.name ?? ''} {c.level}</option
+					>
 				{/each}
 			</select>
 			<div class="flex flex-wrap items-center gap-1">
-				<button type="button" class="btn btn-sm btn-ghost" onclick={newChar} title="New character"><Plus class="size-4" /><span class="hidden md:inline">New</span></button>
-				<button type="button" class="btn btn-sm btn-ghost" onclick={duplicate} title="Duplicate (e.g. before levelling up)"><Copy class="size-4" /><span class="hidden md:inline">Duplicate</span></button>
-				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (confirmDelete = true)} title="Delete character"><Trash2 class="size-4" /></button>
+				<button type="button" class="btn btn-ghost btn-sm" onclick={newChar} title="New character"
+					><Plus class="size-4" /><span class="hidden md:inline">New</span></button
+				>
+				<button
+					type="button"
+					class="btn btn-ghost btn-sm"
+					onclick={duplicate}
+					title="Duplicate (e.g. before levelling up)"
+					><Copy class="size-4" /><span class="hidden md:inline">Duplicate</span></button
+				>
+				<button
+					type="button"
+					class="btn btn-ghost btn-sm"
+					onclick={() => (confirmDelete = true)}
+					title="Delete character"><Trash2 class="size-4" /></button
+				>
 			</div>
 			<div class="ml-auto flex flex-wrap items-center gap-1">
-				<label class="btn btn-sm btn-ghost" title="Load a PDF exported from this app, a character file, or a content pack">
+				<label
+					class="btn btn-ghost btn-sm"
+					title="Load a PDF exported from this app, a character file, or a content pack"
+				>
 					<FileUp class="size-4" /><span class="hidden sm:inline">Open</span>
-					<input type="file" accept=".pdf,.json,application/pdf,application/json" class="hidden" onchange={importFile} />
+					<input
+						type="file"
+						accept=".pdf,.json,application/pdf,application/json"
+						class="hidden"
+						onchange={importFile}
+					/>
 				</label>
-				<button type="button" class="btn btn-sm btn-ghost" onclick={exportJson} title="Save as a character file (JSON)"><Braces class="size-4" /><span class="hidden lg:inline">Save file</span></button>
-				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showPacks = true)} title="Content packs"><Package class="size-4" /><span class="hidden lg:inline">Packs</span></button>
-				<button type="button" class="btn btn-sm btn-ghost btn-square" onclick={cycleTheme} title="Light / dark"><SunMoon class="size-4" /></button>
-				<button type="button" class="btn btn-sm btn-primary" onclick={exportPdf} disabled={busy}><FileDown class="size-4" /> PDF</button>
+				<button
+					type="button"
+					class="btn btn-ghost btn-sm"
+					onclick={exportJson}
+					title="Save as a character file (JSON)"
+					><Braces class="size-4" /><span class="hidden lg:inline">Save file</span></button
+				>
+				<button
+					type="button"
+					class="btn btn-ghost btn-sm"
+					onclick={() => (showPacks = true)}
+					title="Content packs"
+					><Package class="size-4" /><span class="hidden lg:inline">Packs</span></button
+				>
+				<button
+					type="button"
+					class="btn btn-square btn-ghost btn-sm"
+					onclick={cycleTheme}
+					title="Light / dark"><SunMoon class="size-4" /></button
+				>
+				<button type="button" class="btn btn-primary btn-sm" onclick={exportPdf} disabled={busy}
+					><FileDown class="size-4" /> PDF</button
+				>
 			</div>
 		</div>
 		<nav class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4" aria-label="Sections">
 			{#each tabs as [k, label] (k)}
 				<button
 					type="button"
-					class="font-display border-b-2 px-3 py-1.5 text-sm font-bold tracking-wide whitespace-nowrap {tab === k ? 'border-primary text-primary' : 'text-base-content/60 hover:text-base-content border-transparent'}"
+					class="border-b-2 px-3 py-1.5 font-display text-sm font-bold tracking-wide whitespace-nowrap {tab ===
+					k
+						? 'border-primary text-primary'
+						: 'border-transparent text-base-content/60 hover:text-base-content'}"
 					aria-current={tab === k ? 'page' : undefined}
 					onclick={() => setTab(k)}>{label}</button
 				>
 			{/each}
-			<span class="text-base-content/50 ml-auto hidden self-center text-xs md:inline">
-				{getClass(ch)?.name} {ch.level}{subclassName(ch) ? ` · ${subclassName(ch)}` : ''} · saved in this browser
+			<span class="ml-auto hidden self-center text-xs text-base-content/50 md:inline">
+				{getClass(ch)?.name}
+				{ch.level}{subclassName(ch) ? ` · ${subclassName(ch)}` : ''} · saved in this browser
 			</span>
 		</nav>
 	</header>
@@ -260,30 +351,54 @@
 		{:else if tab === 'spells'}<SpellsTab />
 		{:else if tab === 'inventory'}<InventoryTab />
 		{:else}<NotesTab />{/if}
-		<footer class="text-base-content/50 mt-8 text-center text-xs">
-			Rules summaries based on the System Reference Document 5.2 by Wizards of the Coast LLC, licensed under
-			<a class="link" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Characters and
-			content packs are stored only in your browser and in the files you save.
+		<footer class="mt-8 text-center text-xs text-base-content/50">
+			Rules summaries based on the System Reference Document 5.2 by Wizards of the Coast LLC,
+			licensed under
+			<a
+				class="link"
+				href="https://creativecommons.org/licenses/by/4.0/"
+				target="_blank"
+				rel="noreferrer">CC BY 4.0</a
+			>. Characters and content packs are stored only in your browser and in the files you save.
 		</footer>
 	</main>
 
 	{#if toast}
 		<div class="toast toast-end z-50" role="status">
-			<div class="alert {toast.kind === 'err' ? 'alert-error' : 'alert-success'} max-w-md text-sm">{toast.msg}</div>
+			<div class="alert {toast.kind === 'err' ? 'alert-error' : 'alert-success'} max-w-md text-sm">
+				{toast.msg}
+			</div>
 		</div>
 	{/if}
 
 	{#if confirmDelete}
 		<div class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="del-h">
 			<div class="modal-box">
-				<h3 id="del-h" class="font-display text-lg font-bold">Delete {ch.name || 'this character'}?</h3>
-				<p class="py-3 text-sm">It is removed from this browser. Save a PDF or character file first if you want to keep a copy.</p>
+				<h3 id="del-h" class="font-display text-lg font-bold">
+					Delete {ch.name || 'this character'}?
+				</h3>
+				<p class="py-3 text-sm">
+					It is removed from this browser. Save a PDF or character file first if you want to keep a
+					copy.
+				</p>
 				<div class="modal-action">
 					<button type="button" class="btn" onclick={() => (confirmDelete = false)}>Keep</button>
-					<button type="button" class="btn btn-error" onclick={() => { deleteCharacter(ch.id); confirmDelete = false; }}>Delete</button>
+					<button
+						type="button"
+						class="btn btn-error"
+						onclick={() => {
+							deleteCharacter(ch.id);
+							confirmDelete = false;
+						}}>Delete</button
+					>
 				</div>
 			</div>
-			<button type="button" class="modal-backdrop" aria-label="Close" onclick={() => (confirmDelete = false)}></button>
+			<button
+				type="button"
+				class="modal-backdrop"
+				aria-label="Close"
+				onclick={() => (confirmDelete = false)}
+			></button>
 		</div>
 	{/if}
 
@@ -292,41 +407,91 @@
 			<div class="modal-box max-w-2xl">
 				<div class="flex items-center">
 					<h3 id="packs-h" class="font-display text-lg font-bold">Content packs</h3>
-					<button type="button" class="btn btn-ghost btn-sm btn-square ml-auto" aria-label="Close" onclick={() => (showPacks = false)}><X class="size-4" /></button>
+					<button
+						type="button"
+						class="btn ml-auto btn-square btn-ghost btn-sm"
+						aria-label="Close"
+						onclick={() => (showPacks = false)}><X class="size-4" /></button
+					>
 				</div>
-				<p class="text-base-content/75 mt-1 text-sm">
-					A pack adds subclasses, feats, species or backgrounds that then appear in the dropdowns, with their features filled in by level. Packs stay in your browser and travel inside the PDFs and files you save.
+				<p class="mt-1 text-sm text-base-content/75">
+					A pack adds subclasses, feats, species or backgrounds that then appear in the dropdowns,
+					with their features filled in by level. Packs stay in your browser and travel inside the
+					PDFs and files you save.
 				</p>
 				<ul class="mt-3 flex flex-col gap-1">
 					{#each packs.list as p (p.id)}
-						<li class="bg-base-200 rounded-box flex items-center gap-2 px-3 py-2 text-sm">
+						<li class="flex items-center gap-2 rounded-box bg-base-200 px-3 py-2 text-sm">
 							<span class="font-semibold">{p.name}</span>
-							<span class="text-base-content/60 text-xs">{p.subclasses?.length ?? 0} subclasses · {Object.keys(p.feats ?? {}).length} feats · {Object.keys(p.species ?? {}).length} species · {Object.keys(p.backgrounds ?? {}).length} backgrounds</span>
-							<button type="button" class="btn btn-ghost btn-xs ml-auto" onclick={() => removePack(p.id)}><Trash2 class="size-3" /> Remove</button>
+							<span class="text-xs text-base-content/60"
+								>{p.subclasses?.length ?? 0} subclasses · {Object.keys(p.feats ?? {}).length} feats ·
+								{Object.keys(p.species ?? {}).length} species · {Object.keys(p.backgrounds ?? {})
+									.length} backgrounds</span
+							>
+							<button
+								type="button"
+								class="btn ml-auto btn-ghost btn-xs"
+								onclick={() => removePack(p.id)}><Trash2 class="size-3" /> Remove</button
+							>
 						</li>
 					{:else}
-						<li class="text-base-content/60 text-sm">No packs installed.</li>
+						<li class="text-sm text-base-content/60">No packs installed.</li>
 					{/each}
 				</ul>
 				<div class="mt-4 flex flex-wrap gap-2">
 					<label class="btn btn-sm">
 						<FileUp class="size-4" /> Load pack file
-						<input type="file" accept=".json,application/json" class="hidden" onchange={importFile} />
+						<input
+							type="file"
+							accept=".json,application/json"
+							class="hidden"
+							onchange={importFile}
+						/>
 					</label>
-					<button type="button" class="btn btn-sm" onclick={() => download(JSON.stringify(EXAMPLE_PACK, null, 2), 'example-pack.json', 'application/json')}>Download example pack</button>
-					<button type="button" class="btn btn-sm" onclick={() => { installPack(EXAMPLE_PACK); say('Example pack installed: try the Fighter subclass list.'); }}>Install example</button>
+					<button
+						type="button"
+						class="btn btn-sm"
+						onclick={() =>
+							download(
+								JSON.stringify(EXAMPLE_PACK, null, 2),
+								'example-pack.json',
+								'application/json'
+							)}>Download example pack</button
+					>
+					<button
+						type="button"
+						class="btn btn-sm"
+						onclick={() => {
+							installPack(EXAMPLE_PACK);
+							say('Example pack installed: try the Fighter subclass list.');
+						}}>Install example</button
+					>
 				</div>
 				<label class="mt-4 flex flex-col gap-1 text-sm">
 					Or paste pack JSON
-					<textarea class="textarea textarea-sm num h-32 w-full text-xs" bind:value={packText} placeholder={'{ "id": "my-pack", "name": "My pack", "subclasses": [ … ] }'}></textarea>
+					<textarea
+						class="num textarea h-32 w-full text-xs textarea-sm"
+						bind:value={packText}
+						placeholder={'{ "id": "my-pack", "name": "My pack", "subclasses": [ … ] }'}
+					></textarea>
 				</label>
 				<div class="modal-action">
-					<button type="button" class="btn btn-primary btn-sm" disabled={!packText.trim()} onclick={installFromText}>Install pasted pack</button>
+					<button
+						type="button"
+						class="btn btn-primary btn-sm"
+						disabled={!packText.trim()}
+						onclick={installFromText}>Install pasted pack</button
+					>
 				</div>
 			</div>
-			<button type="button" class="modal-backdrop" aria-label="Close" onclick={() => (showPacks = false)}></button>
+			<button
+				type="button"
+				class="modal-backdrop"
+				aria-label="Close"
+				onclick={() => (showPacks = false)}
+			></button>
 		</div>
 	{/if}
 {:else}
-	<p class="text-base-content/60 p-8 text-center">Loading your characters…</p>
+	<p class="p-8 text-center text-base-content/60">Loading your characters…</p>
 {/if}

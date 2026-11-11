@@ -43,7 +43,9 @@
 		class="group flex items-center gap-1 rounded px-1 whitespace-nowrap {size === 'lg'
 			? 'text-2xl'
 			: 'text-lg'} num hover:bg-base-200 {custom ? 'text-accent' : ''}"
-		title={[...parts, custom ? 'Custom value set' : '', 'Click to adjust'].filter(Boolean).join('\n')}
+		title={[...parts, custom ? 'Custom value set' : '', 'Click to adjust']
+			.filter(Boolean)
+			.join('\n')}
 		onclick={() => (open = !open)}
 	>
 		{sign ? signed(value) : value}{suffix}
@@ -51,10 +53,10 @@
 	</button>
 	{#if open}
 		<div
-			class="rounded-box border-base-300 bg-base-100 absolute top-full z-30 mt-1 w-56 border p-3 text-left shadow-lg"
+			class="absolute top-full z-30 mt-1 w-56 rounded-box border border-base-300 bg-base-100 p-3 text-left shadow-lg"
 		>
 			{#if parts.length}
-				<ul class="text-base-content/70 mb-2 text-xs">
+				<ul class="mb-2 text-xs text-base-content/70">
 					{#each parts as p (p)}<li>{p}</li>{/each}
 				</ul>
 			{/if}
@@ -62,7 +64,7 @@
 				Misc bonus
 				<input
 					type="number"
-					class="input input-sm num w-20"
+					class="num input w-20 input-sm"
 					value={ch.bonus[key] ?? ''}
 					oninput={(e) => setBonus(e.currentTarget.value)}
 				/>
@@ -71,7 +73,7 @@
 				Replace with
 				<input
 					type="number"
-					class="input input-sm num w-20"
+					class="num input w-20 input-sm"
 					placeholder="auto"
 					value={ch.overrides[key] ?? ''}
 					oninput={(e) => setOverride(e.currentTarget.value)}
@@ -86,7 +88,9 @@
 						delete ch.bonus[key];
 					}}><RotateCcw class="size-3" /> Auto</button
 				>
-				<button type="button" class="btn btn-primary btn-xs" onclick={() => (open = false)}>Done</button>
+				<button type="button" class="btn btn-primary btn-xs" onclick={() => (open = false)}
+					>Done</button
+				>
 			</div>
 		</div>
 	{/if}
