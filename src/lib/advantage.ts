@@ -1,8 +1,8 @@
 // Where the character rolls with advantage or disadvantage, and why (D&D 2024 rules).
 // Targets: a skill id, "save:<ab>", "save:all", "check:<ab>" (every check with that ability),
 // "init", "death" (Death Saving Throws) or "conc" (Concentration saves).
-import { ARMOR, AB_NAMES, SKILLS } from './data/srd';
-import { armorClass, availableStates, hasFeat, scores } from './calc';
+import { AB_NAMES, SKILLS } from './data/srd';
+import { armorClass, availableStates, hasFeat, scores, wornArmor } from './calc';
 import type { Ab, Character } from './types';
 
 export type AdvMode = 'adv' | 'dis';
@@ -163,8 +163,8 @@ export function advantages(ch: Character): AdvEntry[] {
 					source: st.name
 				});
 	}
-	// Armor that hinders Stealth .
-	const armor = ARMOR[ch.gear.armor];
+	// Armor that hinders Stealth.
+	const armor = wornArmor(ch);
 	if (armor && armorClass(ch, sc).stealthDis)
 		out.push({ target: 'stealth', mode: 'dis', source: armor.name });
 	for (const c of ch.advCustom ?? [])

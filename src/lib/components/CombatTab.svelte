@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, Copy, Plus, Trash2, Swords, Info } from 'lucide-svelte';
+	import { ChevronDown, ChevronUp, Info, Trash2 } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
 	import {
+		allAttacks,
 		attack,
 		attackFromSpell,
 		autoRiders,
 		availableStates,
-		features,
 		grantedSpells,
 		hitText,
 		masteredWeapons,
@@ -16,39 +16,29 @@
 		stateSummary
 	} from '$lib/calc';
 	import { allPackSpells } from '$lib/packs.svelte';
-	import { AB_NAMES, ACTION_LABELS, MASTERIES, WEAPONS } from '$lib/data/srd';
-	import { newAttack, uid } from '$lib/store.svelte';
-	import { ABILITIES, type Attack, type Rider } from '$lib/types';
-	import FeatureCard from './FeatureCard.svelte';
+	import { AB_NAMES, MASTERIES } from '$lib/data/srd';
+	import { newAttack } from '$lib/store.svelte';
+	import type { Rider } from '$lib/types';
+	import AttackEditor from './AttackEditor.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
 	const auto = $derived(autoRiders(ch, sc).filter((x) => !x.state));
 	const situational = $derived(availableStates(ch, sc));
 	const mastered = $derived(masteredWeapons(ch));
-	const feats = $derived(features(ch).filter((f) => !f.hidden));
+	const attacks = $derived(allAttacks(ch));
+	/** Spell attacks are edited here; weapons are edited in the Inventory. */
+	const own = $derived(new Set(ch.attacks.map((x) => x.id)));
 	let open = $state<Record<string, boolean>>({});
 
-	function applyWeapon(a: Attack, key: string) {
-		a.weapon = key;
-		const w = WEAPONS[key];
-		if (!w) return;
-		a.name = w.name;
-		a.kind = w.kind;
-		a.dice = w.dice;
-		a.versatile = w.versatile ?? '';
-		a.type = w.type;
-		a.mastery = w.mastery;
-		a.props = w.props.join(', ');
-		a.range = w.range ?? '';
-		a.twoHanded = false;
-	}
-	function add(kind: Attack['kind']) {
-		const a = newAttack(
-			kind === 'spell'
-				? { name: 'Spell attack', kind: 'spell', dice: '1d10', type: '', addMod: false }
-				: {}
-		);
+	function addBlank() {
+		const a = newAttack({
+			name: 'Spell attack',
+			kind: 'spell',
+			dice: '1d10',
+			type: '',
+			addMod: false
+		});
 		ch.attacks.push(a);
 		open[a.id] = true;
 	}
@@ -68,41 +58,11 @@
 			.sort((x, y) => x.level - y.level || x.name.localeCompare(y.name));
 	});
 	function addSpell(name: string) {
-		if (name === '__blank') return add('spell');
+		if (name === '__blank') return addBlank();
 		const d = allPackSpells().find((x) => x.name === name);
 		const p = d && attackFromSpell(ch, d);
 		if (p) ch.attacks.push(newAttack(p));
 	}
-	function duplicate(a: Attack) {
-		const i = ch.attacks.indexOf(a);
-		const b = { ...$state.snapshot(a), id: uid(), name: a.name + ' (variant)' } as Attack;
-		ch.attacks.splice(i + 1, 0, b);
-		open[b.id] = true;
-	}
-	function move(a: Attack, d: number) {
-		const i = ch.attacks.indexOf(a);
-		const j = i + d;
-		if (j < 0 || j >= ch.attacks.length) return;
-		ch.attacks.splice(i, 1);
-		ch.attacks.splice(j, 0, a);
-	}
-	function addRider() {
-		ch.riders.push({
-			id: uid(),
-			name: 'New rider',
-			dmg: '1d6',
-			type: '',
-			hit: 0,
-			applies: 'weapon',
-			when: ''
-		});
-	}
-	const groups: { a: string; label: string }[] = [
-		{ a: 'action', label: ACTION_LABELS.action },
-		{ a: 'bonus', label: ACTION_LABELS.bonus },
-		{ a: 'reaction', label: ACTION_LABELS.reaction },
-		{ a: 'special', label: 'Special & on-hit' }
-	];
 	const appliesLabel: Record<Rider['applies'], string> = {
 		melee: 'Melee',
 		ranged: 'Ranged',
@@ -117,48 +77,39 @@
 		<div class="mb-2 flex flex-wrap items-center gap-2">
 			<h2 id="attacks-h" class="panel-title mb-0">Attacks</h2>
 			<span class="text-xs text-base-content/60"
-				>Damage includes bonuses that always apply; extra damage that only applies sometimes is
-				listed under each attack.</span
+				>Your equipped weapons (set them up in the Inventory) and your spell attacks. Damage counts
+				bonuses that always apply; extra damage that only applies sometimes is listed under the
+				attack.</span
 			>
-			<span class="ml-auto flex gap-1">
-				<button type="button" class="btn btn-sm" onclick={() => add('melee')}
-					><Plus class="size-4" /> Weapon</button
-				>
-				<select
-					class="select w-44 select-sm"
-					aria-label="Add a spell attack"
-					value=""
-					onchange={(e) => {
-						addSpell(e.currentTarget.value);
-						e.currentTarget.value = '';
-					}}
-				>
-					<option value="" disabled>+ Spell attack…</option>
-					{#each spellOptions as d (d.name)}<option value={d.name}
-							>{d.name} ({d.level ? `level ${d.level}` : 'cantrip'})</option
-						>{/each}
-					<option value="__blank">Blank spell attack</option>
-				</select>
-			</span>
+			<select
+				class="select ml-auto w-44 select-sm"
+				aria-label="Add a spell attack"
+				value=""
+				onchange={(e) => {
+					addSpell(e.currentTarget.value);
+					e.currentTarget.value = '';
+				}}
+			>
+				<option value="" disabled>+ Spell attack…</option>
+				{#each spellOptions as d (d.name)}<option value={d.name}
+						>{d.name} ({d.level ? `level ${d.level}` : 'cantrip'})</option
+					>{/each}
+				<option value="__blank">Blank spell attack</option>
+			</select>
 		</div>
 
-		{#if !ch.attacks.length}
+		{#if !attacks.length}
 			<p class="py-6 text-center text-sm text-base-content/60">
-				No attacks yet. Add a weapon or a spell attack.
+				No attacks yet. Equip a weapon in the Inventory tab, or add a spell attack.
 			</p>
 		{/if}
 
 		<div class="flex flex-col gap-2">
-			{#each ch.attacks as a (a.id)}
+			{#each attacks as a (a.id)}
 				{@const r = attack(ch, a, sc)}
 				<article class="rounded-box border border-base-300">
 					<header class="flex flex-wrap items-center gap-x-3 gap-y-1 p-2.5">
-						<button
-							type="button"
-							class="flex min-w-0 flex-1 items-baseline gap-2 text-left"
-							onclick={() => (open[a.id] = !open[a.id])}
-							aria-expanded={!!open[a.id]}
-						>
+						<span class="flex min-w-0 flex-1 items-baseline gap-2">
 							<span class="truncate font-display text-lg font-bold">{a.name || 'Unnamed'}</span>
 							<span
 								class="num text-lg font-semibold text-primary"
@@ -167,7 +118,7 @@
 							>
 							<span class="num text-sm">{r.total}</span>
 							<span class="text-sm text-base-content/60">{r.types || a.type}</span>
-						</button>
+						</span>
 						{#if a.mastery}<span
 								class="tag {mastered.has(a.weapon) ? '' : 'line-through opacity-60'}"
 								title={mastered.has(a.weapon)
@@ -176,14 +127,21 @@
 								>{a.mastery}</span
 							>{/if}
 						{#if a.range}<span class="text-xs text-base-content/60">{a.range}</span>{/if}
-						<button
-							type="button"
-							class="btn btn-square btn-ghost btn-xs"
-							title="Edit"
-							onclick={() => (open[a.id] = !open[a.id])}
-						>
-							{#if open[a.id]}<ChevronUp class="size-4" />{:else}<ChevronDown class="size-4" />{/if}
-						</button>
+						{#if own.has(a.id)}
+							<button
+								type="button"
+								class="btn btn-square btn-ghost btn-xs"
+								title="Edit"
+								aria-label="Edit {a.name}"
+								onclick={() => (open[a.id] = !open[a.id])}
+							>
+								{#if open[a.id]}<ChevronUp class="size-4" />{:else}<ChevronDown
+										class="size-4"
+									/>{/if}
+							</button>
+						{:else}
+							<a href="#inventory" class="link text-xs text-base-content/55">edit in Inventory</a>
+						{/if}
 					</header>
 
 					<div class="border-t border-base-300 px-2.5 py-2">
@@ -247,153 +205,28 @@
 							</p>{/if}
 					</div>
 
-					{#if open[a.id]}
-						<div
-							class="grid grid-cols-2 gap-2 border-t border-base-300 bg-base-200 p-2.5 text-xs sm:grid-cols-4"
-						>
-							<label class="col-span-2 flex flex-col"
-								>Name<input class="input input-sm" bind:value={a.name} /></label
+					{#if own.has(a.id) && open[a.id]}
+						<div class="flex flex-col gap-2 border-t border-base-300 bg-base-200 p-2.5">
+							<AttackEditor {a} weapon={false} />
+							<button
+								type="button"
+								class="btn self-end btn-outline btn-error btn-xs"
+								onclick={() => (ch.attacks = ch.attacks.filter((x) => x.id !== a.id))}
+								><Trash2 class="size-3" /> Delete</button
 							>
-							<label class="col-span-2 flex flex-col"
-								>Weapon template
-								<select
-									class="select select-sm"
-									value={a.weapon}
-									onchange={(e) => applyWeapon(a, e.currentTarget.value)}
-								>
-									<option value="">Custom</option>
-									<optgroup label="Simple"
-										>{#each Object.entries(WEAPONS).filter(([, w]) => w.cat === 'simple') as [k, w] (k)}<option
-												value={k}>{w.name}</option
-											>{/each}</optgroup
-									>
-									<optgroup label="Martial"
-										>{#each Object.entries(WEAPONS).filter(([, w]) => w.cat === 'martial') as [k, w] (k)}<option
-												value={k}>{w.name}</option
-											>{/each}</optgroup
-									>
-								</select>
-							</label>
-							<label class="flex flex-col"
-								>Kind
-								<select class="select select-sm" bind:value={a.kind}
-									><option value="melee">Melee</option><option value="ranged">Ranged</option><option
-										value="spell">Spell</option
-									></select
-								>
-							</label>
-							<label class="flex flex-col"
-								>Ability
-								<select class="select select-sm" bind:value={a.ability}>
-									<option value="auto">Auto ({r.ability.toUpperCase()})</option>
-									{#each ABILITIES as ab (ab)}<option value={ab}>{AB_NAMES[ab]}</option>{/each}
-								</select>
-							</label>
-							<label class="flex flex-col"
-								>Roll
-								<select class="select select-sm" bind:value={a.save}>
-									<option value="">Attack roll</option>
-									{#each ABILITIES as ab (ab)}<option value={ab}>{AB_NAMES[ab]} save (DC)</option
-										>{/each}
-								</select>
-							</label>
-							<label class="flex flex-col"
-								>Damage dice<input
-									class="num input input-sm"
-									bind:value={a.dice}
-									placeholder="1d8"
-								/></label
-							>
-							<label class="flex flex-col"
-								>Versatile dice<input
-									class="num input input-sm"
-									bind:value={a.versatile}
-									placeholder="—"
-								/></label
-							>
-							<label class="flex flex-col"
-								>Damage type<input class="input input-sm" bind:value={a.type} /></label
-							>
-							<label class="flex flex-col"
-								>Magic bonus (+hit, +dmg)<input
-									type="number"
-									class="num input input-sm"
-									bind:value={a.magic}
-								/></label
-							>
-							<label class="flex flex-col"
-								>Other to-hit bonus<input
-									type="number"
-									class="num input input-sm"
-									bind:value={a.hitMisc}
-								/></label
-							>
-							<label class="flex flex-col"
-								>Other damage<input
-									class="num input input-sm"
-									bind:value={a.dmgMisc}
-									placeholder="e.g. 2 or 1d4"
-								/></label
-							>
-							<label class="flex flex-col"
-								>Mastery
-								<select class="select select-sm" bind:value={a.mastery}
-									><option value="">—</option>{#each Object.keys(MASTERIES) as m (m)}<option
-											value={m}>{m}</option
-										>{/each}</select
-								>
-							</label>
-							<label class="flex flex-col"
-								>Range<input class="input input-sm" bind:value={a.range} /></label
-							>
-							<label class="col-span-2 flex flex-col"
-								>Properties<input class="input input-sm" bind:value={a.props} /></label
-							>
-							<label class="flex items-center gap-2 self-end pb-1"
-								><input type="checkbox" class="checkbox checkbox-xs" bind:checked={a.proficient} /> Proficient</label
-							>
-							<label class="flex items-center gap-2 self-end pb-1"
-								><input type="checkbox" class="checkbox checkbox-xs" bind:checked={a.addMod} /> Add ability
-								mod to damage</label
-							>
-							<label class="col-span-2 flex flex-col sm:col-span-4"
-								>Notes<input class="input input-sm" bind:value={a.notes} /></label
-							>
-							<div class="col-span-2 flex gap-1 sm:col-span-4">
-								<button type="button" class="btn btn-xs" onclick={() => move(a, -1)}>Move up</button
-								>
-								<button type="button" class="btn btn-xs" onclick={() => move(a, 1)}
-									>Move down</button
-								>
-								<button type="button" class="btn btn-xs" onclick={() => duplicate(a)}
-									><Copy class="size-3" /> Duplicate as variant</button
-								>
-								<button
-									type="button"
-									class="btn ml-auto btn-outline btn-error btn-xs"
-									onclick={() => (ch.attacks = ch.attacks.filter((x) => x.id !== a.id))}
-									><Trash2 class="size-3" /> Delete</button
-								>
-							</div>
 						</div>
 					{/if}
 				</article>
 			{/each}
 		</div>
 
-		<!-- Riders -->
-		<div class="mt-4 border-t border-base-300 pt-3">
-			<div class="mb-2 flex items-center gap-2">
-				<h3 class="panel-title mb-0">Damage riders</h3>
-				<span class="text-xs text-base-content/60"
-					>Extra damage that only applies sometimes, listed under the attacks it can add to.</span
-				>
-				<button type="button" class="btn ml-auto btn-sm" onclick={addRider}
-					><Plus class="size-4" /> Rider</button
-				>
-			</div>
-			{#if auto.length}
-				<ul class="mb-2 flex flex-col gap-1 text-sm">
+		{#if auto.length}
+			<div class="mt-4 border-t border-base-300 pt-3">
+				<h3 class="panel-title mb-1">Extra damage you can add</h3>
+				<p class="mb-2 text-xs text-base-content/60">
+					From your class, species and feats. Each applies only in the situation described.
+				</p>
+				<ul class="flex flex-col gap-1 text-sm">
 					{#each auto as x (x.id)}
 						<li class="flex flex-wrap items-baseline gap-x-2">
 							<Info class="size-3.5 translate-y-0.5 text-base-content/40" />
@@ -403,56 +236,12 @@
 							>
 							<span class="text-base-content/60">{x.type}</span>
 							<span class="tag">{appliesLabel[x.applies]}</span>
-							<span class="text-xs text-base-content/55"
-								>{x.when} · from your class/species/feats</span
-							>
+							<span class="text-xs text-base-content/55">{x.when}</span>
 						</li>
 					{/each}
 				</ul>
-			{/if}
-			<div class="flex flex-col gap-2">
-				{#each ch.riders as x (x.id)}
-					<div class="grid grid-cols-2 gap-2 rounded-box bg-base-200 p-2 text-xs sm:grid-cols-6">
-						<label class="col-span-2 flex flex-col"
-							>Name<input class="input input-sm" bind:value={x.name} /></label
-						>
-						<label class="flex flex-col"
-							>Extra damage<input
-								class="num input input-sm"
-								bind:value={x.dmg}
-								placeholder="1d6 or {'{pb}'}"
-							/></label
-						>
-						<label class="flex flex-col"
-							>Type<input class="input input-sm" bind:value={x.type} /></label
-						>
-						<label class="flex flex-col"
-							>To-hit<input type="number" class="num input input-sm" bind:value={x.hit} /></label
-						>
-						<label class="flex flex-col"
-							>Applies to
-							<select class="select select-sm" bind:value={x.applies}
-								>{#each Object.entries(appliesLabel) as [k, v] (k)}<option value={k}>{v}</option
-									>{/each}</select
-							>
-						</label>
-						<label class="col-span-2 flex flex-col sm:col-span-5"
-							>When<input
-								class="input input-sm"
-								bind:value={x.when}
-								placeholder="e.g. while concentrating on Hex"
-							/></label
-						>
-						<button
-							type="button"
-							class="btn self-end btn-outline btn-error btn-xs"
-							onclick={() => (ch.riders = ch.riders.filter((y) => y.id !== x.id))}
-							><Trash2 class="size-3" /> Remove</button
-						>
-					</div>
-				{/each}
 			</div>
-		</div>
+		{/if}
 	</section>
 
 	{#if situational.length}

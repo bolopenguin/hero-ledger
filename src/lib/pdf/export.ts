@@ -24,6 +24,7 @@ import {
 	subclassName
 } from '../calc';
 import {
+	allAttacks,
 	allOptions,
 	availableStates,
 	backgroundTool,
@@ -33,7 +34,9 @@ import {
 	optionList,
 	SPELL_KIND_LABEL,
 	stateSummary,
-	toolProficiencies
+	toolProficiencies,
+	wornArmor,
+	wornShields
 } from '../calc';
 import { classStats } from '../classStats';
 import { advantages, advForSave, advForSkill, advLabel, advMarker } from '../advantage';
@@ -572,8 +575,9 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	// Attacks (flow below the columns)
 	w.y = Math.min(y, ys, yr) - 6;
 	w.heading('Attacks');
-	if (!ch.attacks.length) w.para('No attacks recorded.', M, w.W, 8.5, w.i, MUTED);
-	for (const a of ch.attacks) {
+	const attacks = allAttacks(ch);
+	if (!attacks.length) w.para('No weapon equipped and no spell attacks.', M, w.W, 8.5, w.i, MUTED);
+	for (const a of attacks) {
 		const r = attack(ch, a, sc);
 		w.ensure(30);
 		w.y -= 13;
@@ -954,8 +958,8 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	w.heading('Equipment');
 	const carry = carrying(ch, sc);
 	w.y -= 14;
-	const armorName = ARMOR[ch.gear.armor]?.name ?? 'No armor';
-	w.text(`${armorName}${ch.gear.shield ? ' + Shield' : ''} - AC ${ac.value}`, M, w.y, 9.5, w.b);
+	const worn = [wornArmor(ch)?.name ?? 'No armor', ...wornShields(ch).map((x) => x.name)];
+	w.text(`${worn.join(' + ')} - AC ${ac.value}`, M, w.y, 9.5, w.b);
 	w.text(
 		`Carrying ${carry.total} / ${carry.cap} lb   |   Attuned ${ch.gear.items.filter((i) => i.attuned).length} / ${attunementMax(ch)}`,
 		M + 260,
@@ -984,8 +988,20 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.label('Notes', M + 326, w.y - 9);
 		w.y -= 10;
 		for (const it of ch.gear.items.filter((i) => (i.location || 'Backpack') === loc)) {
+			const stats =
+				it.kind === 'weapon' && it.atk
+					? (() => {
+							const r = attack(ch, it.atk, sc);
+							return `${hitText(it.atk, r)}, ${r.total} ${r.types || it.atk.type}`;
+						})()
+					: it.kind === 'armor' && it.armor
+						? it.armor.type === 'shield'
+							? `AC ${signed(it.armor.base + it.armor.bonus)}`
+							: `AC ${it.armor.base + it.armor.bonus}${it.armor.dexCap === null ? ' + Dex' : it.armor.dexCap ? ` + Dex (max ${it.armor.dexCap})` : ''}${it.armor.str ? `, Str ${it.armor.str}` : ''}`
+						: '';
 			const flags = [
-				it.equipped ? 'equipped' : '',
+				stats,
+				it.equipped ? (it.kind === 'item' ? 'equipped' : 'in use') : '',
 				it.attuned ? 'attuned' : '',
 				it.magic ? 'magic' : ''
 			]

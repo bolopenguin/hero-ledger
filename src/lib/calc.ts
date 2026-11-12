@@ -747,6 +747,30 @@ export function skills(ch: Character, sc = scores(ch)) {
 	return out;
 }
 
+/** The body armor being worn (the first equipped armor that is not a shield). */
+export function wornArmor(ch: Character) {
+	const it = ch.gear.items.find(
+		(i) => i.kind === 'armor' && i.equipped && i.armor?.type !== 'shield'
+	);
+	if (!it?.armor) return undefined;
+	return { ...it.armor, name: it.name, weight: it.weight };
+}
+
+/** Equipped shields; their AC bonuses add up like any other item. */
+export function wornShields(ch: Character) {
+	return ch.gear.items.filter(
+		(i) => i.kind === 'armor' && i.equipped && i.armor?.type === 'shield'
+	);
+}
+
+/** Weapons in the equipment list that are equipped, then spell attacks. */
+export function allAttacks(ch: Character): Attack[] {
+	const weapons = ch.gear.items
+		.filter((i) => i.kind === 'weapon' && i.atk && i.equipped)
+		.map((i) => i.atk!);
+	return [...weapons, ...ch.attacks];
+}
+
 /**
  * Armor Class. `on` lists situational effects to count (Mage Armor, Shield of Faith…):
  * the sheet itself counts none, the PDF prints the AC you get with each one.
@@ -757,13 +781,16 @@ export function armorClass(ch: Character, sc = scores(ch), on: string[] = []) {
 	const states = availableStates(ch, sc).filter((st) => on.includes(st.id));
 	const sctx = stateCtx(ch, sc);
 	const unarmored = states.some((st) => st.ac?.ignoreArmor);
-	const armor = unarmored ? undefined : ARMOR[ch.gear.armor];
+	const armor = unarmored ? undefined : wornArmor(ch);
+	const shields = wornShields(ch);
 	const parts: string[] = [];
 	let base: number;
 	if (armor) {
-		const d = armor.dexCap === null ? dex : Math.min(dex, armor.dexCap);
-		base = armor.base + d;
-		parts.push(`${armor.name} ${armor.base}${d ? ` ${signed(d)} Dex` : ''}`);
+		const d = armor.dexCap === null ? dex : armor.dexCap === 0 ? 0 : Math.min(dex, armor.dexCap);
+		base = armor.base + d + armor.bonus;
+		parts.push(
+			`${armor.name} ${armor.base}${armor.bonus ? ` ${signed(armor.bonus)}` : ''}${d ? ` ${signed(d)} Dex` : ''}`
+		);
 	} else {
 		// Pick the best unarmored formula the character has.
 		base = 10 + dex;
@@ -771,11 +798,11 @@ export function armorClass(ch: Character, sc = scores(ch), on: string[] = []) {
 		const opts: [number, string][] = [];
 		if (ch.classId === 'barbarian')
 			opts.push([10 + dex + c.m('con'), 'Unarmored Defense (Dex + Con)']);
-		if (ch.classId === 'monk' && !ch.gear.shield)
+		if (ch.classId === 'monk' && !shields.length)
 			opts.push([10 + dex + c.m('wis'), 'Unarmored Defense (Dex + Wis)']);
 		if (ch.classId === 'sorcerer' && ch.level >= 3 && sctx.sub('srd'))
 			opts.push([10 + dex + c.m('cha'), 'Draconic Resilience (Dex + Cha)']);
-		if (ch.classId === 'bard' && ch.level >= 3 && sctx.sub('dance') && !ch.gear.shield)
+		if (ch.classId === 'bard' && ch.level >= 3 && sctx.sub('dance') && !shields.length)
 			opts.push([10 + dex + c.m('cha'), 'Dazzling Footwork (Dex + Cha)']);
 		for (const st of states)
 			if (st.ac?.base) opts.push([st.ac.base(sctx), st.ac.baseLabel ?? st.name]);
@@ -786,9 +813,10 @@ export function armorClass(ch: Character, sc = scores(ch), on: string[] = []) {
 			}
 		parts.push(label);
 	}
-	if (ch.gear.shield) {
-		base += 2;
-		parts.push('Shield +2');
+	for (const sh of shields) {
+		const v = (sh.armor?.base ?? 0) + (sh.armor?.bonus ?? 0);
+		base += v;
+		parts.push(`${sh.name} ${signed(v)}`);
 	}
 	if (armor && hasFeat(ch, 'defense')) {
 		base += 1;
@@ -835,7 +863,7 @@ export function stateCtx(ch: Character, sc = scores(ch)): StateCtx {
 			return spellNames.has(name.toLowerCase());
 		},
 		speciesId: ch.speciesId,
-		hasArmor: !!ARMOR[ch.gear.armor]
+		hasArmor: !!wornArmor(ch)
 	};
 }
 
@@ -882,9 +910,9 @@ export function speed(ch: Character, sc = scores(ch)) {
 	const sp = getSpecies(ch);
 	let v = sp?.speed ?? 30;
 	if (ch.speciesId === 'elf' && ch.lineage === 'wood') v = 35;
-	const armor = ARMOR[ch.gear.armor];
+	const armor = wornArmor(ch);
 	if (ch.classId === 'barbarian' && ch.level >= 5 && armor?.type !== 'heavy') v += 10;
-	if (ch.classId === 'monk' && ch.level >= 2 && !armor && !ch.gear.shield)
+	if (ch.classId === 'monk' && ch.level >= 2 && !armor && !wornShields(ch).length)
 		v += by(ch.level, [
 			[2, 10],
 			[6, 15],
@@ -922,9 +950,7 @@ export function carrying(ch: Character, sc = scores(ch)) {
 	const cap = sc.str.total * 15 * mult;
 	const coins = Object.values(ch.gear.coins).reduce((a, b) => a + (b || 0), 0);
 	const items = ch.gear.items.reduce((a, i) => a + (i.weight || 0) * (i.qty || 0), 0);
-	const armor = ARMOR[ch.gear.armor]?.weight ?? 0;
-	const shield = ch.gear.shield ? 6 : 0;
-	const total = items + armor + shield + coins / 50;
+	const total = items + coins / 50;
 	return { cap, total: Math.round(total * 100) / 100, coinsWeight: coins / 50 };
 }
 
@@ -1173,7 +1199,7 @@ export function extraTraining(ch: Character) {
 }
 
 export function allRiders(ch: Character, sc = scores(ch)): Rider[] {
-	return [...autoRiders(ch, sc), ...ch.riders];
+	return autoRiders(ch, sc);
 }
 
 const ALWAYS_ON = new Set(['auto:radiant', 'auto:archery']);
@@ -1228,6 +1254,22 @@ export function attack(ch: Character, a: Attack, sc = scores(ch)): AttackResult 
 	const riders = allRiders(ch, sc)
 		.filter((r) => riderApplies(r, a))
 		.map((r) => ({ r, on: riderActive(r), terms: parseDice(fillTemplate(r.dmg, c)) }));
+	// Extra damage written on the weapon itself: counted when "always", otherwise listed.
+	for (const e of a.extras ?? [])
+		if (e.dmg.trim())
+			riders.push({
+				r: {
+					id: `extra:${e.id}`,
+					name: e.type ? `Extra ${e.type}` : 'Extra damage',
+					dmg: e.dmg,
+					type: e.type,
+					hit: 0,
+					applies: 'all',
+					when: e.when
+				},
+				on: e.always,
+				terms: parseDice(fillTemplate(e.dmg, c))
+			});
 	let dice = a.twoHanded && a.versatile ? a.versatile : a.dice;
 	const wd = WEAPONS[a.weapon];
 	const monkWeapon =

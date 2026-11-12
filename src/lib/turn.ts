@@ -1,6 +1,7 @@
 // "Your turn": everything a character can do, grouped by Action, Bonus Action and Reaction,
 // plus what triggers when you hit. Used by the Your turn tab and the PDF.
 import {
+	allAttacks,
 	allRiders,
 	attack,
 	features,
@@ -110,7 +111,7 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 	// ---- Attack action
 	const n = attacksPerAction(ch);
 	const mastered = masteredWeapons(ch);
-	const weaponLines = ch.attacks
+	const weaponLines = allAttacks(ch)
 		.filter((a) => a.kind !== 'spell')
 		.map((a) => {
 			const r = attack(ch, a, sc);
@@ -135,7 +136,7 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 	});
 
 	// Light weapons: the extra attack
-	const light = ch.attacks.filter(
+	const light = allAttacks(ch).filter(
 		(a) => (WEAPONS[a.weapon]?.props ?? []).includes('Light') || /\bLight\b/.test(a.props)
 	);
 	if (light.length >= 2)
@@ -162,7 +163,7 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 		if (seen.has(key)) return;
 		seen.add(key);
 		const slot = slotOfTime(time);
-		const atk = ch.attacks.filter(
+		const atk = allAttacks(ch).filter(
 			(a) => a.kind === 'spell' && (a.spell ?? a.name).toLowerCase() === key
 		);
 		out[slot].push({

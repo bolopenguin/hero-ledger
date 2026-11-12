@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PDFDocument, PDFCheckBox } from 'pdf-lib';
 import {
+	allAttacks,
 	allOptions,
 	availableStates,
 	armorClass,
@@ -35,7 +36,16 @@ import {
 	runIn
 } from './packs.svelte';
 import { avgDice, evalFormula, fillTemplate, formatDice, parseDice } from './formula';
-import { blankCharacter, newAttack, newSpell, sampleCharacter } from './store.svelte';
+import {
+	blankCharacter,
+	newArmorItem,
+	newAttack,
+	newItem,
+	newSpell,
+	newWeaponItem,
+	normalize,
+	sampleCharacter
+} from './store.svelte';
 import { buildPdf } from './pdf/export';
 import { readEmbedded, readPdf } from './pdf/import';
 import { CLASSES } from './data/classes';
@@ -88,16 +98,32 @@ describe('sample fighter (level 5 Champion, dwarf)', () => {
 		expect(sk.athletics.prof).toBe(2);
 	});
 	it('computes attacks with riders and crit range', () => {
-		const ls = attack(ch, ch.attacks[0], sc);
+		const sword = allAttacks(ch)[0];
+		const ls = attack(ch, sword, sc);
 		expect(ls.toHit).toBe(7);
 		expect(ls.base).toBe('1d8 + 4');
 		expect(ls.critOn).toBe(19);
-		ch.attacks[0].twoHanded = true;
-		const two = attack(ch, ch.attacks[0], sc);
+		sword.twoHanded = true;
+		const two = attack(ch, sword, sc);
 		// Riders that apply only sometimes are listed with the attack, not added in.
 		expect(two.total).toBe('1d10 + 4');
 		expect(two.crit).toBe('2d10 + 4');
-		expect(two.riders.find((x) => x.r.id === ch.riders[0].id)?.on).toBe(false);
+	});
+	it('a custom weapon adds its extra damage dice, listed or counted', () => {
+		const ft = ch.gear.items.find((i) => i.name.startsWith('Flame Tongue'))!;
+		expect(ft.kind).toBe('weapon');
+		expect(allAttacks(ch).includes(ft.atk!)).toBe(false); // not equipped
+		ft.equipped = true;
+		expect(allAttacks(ch).includes(ft.atk!)).toBe(true);
+		const listed = attack(ch, ft.atk!, sc);
+		expect(listed.total).toBe('1d8 + 4');
+		expect(listed.riders.find((x) => x.r.dmg === '2d6')?.on).toBe(false);
+		ft.atk!.extras[0].always = true;
+		ft.atk!.magic = 1;
+		const counted = attack(ch, ft.atk!, sc);
+		expect(counted.total).toBe('1d8 + 2d6 + 5');
+		expect(counted.types).toContain('Fire');
+		expect(counted.toHit).toBe(listed.toHit + 1);
 	});
 	it('lists features by level with the chosen feats', () => {
 		const f = features(ch);
@@ -163,7 +189,7 @@ describe('PDF round trip', () => {
 		expect(r.character.name).toBe(ch.name);
 		expect(r.character.hp.current).toBe(31);
 		expect(r.character.gear.coins.gp).toBe(123);
-		expect(r.character.attacks.length).toBe(3);
+		expect(allAttacks(r.character).length).toBe(2);
 		expect(r.changedFields).toBeGreaterThan(10);
 	});
 	it('rejects PDFs without character data', async () => {
@@ -360,7 +386,7 @@ describe('situational effects', () => {
 		ch.subclassId = 'srd';
 		ch.level = 5;
 		ch.abilities = { str: 16, dex: 14, con: 16, int: 10, wis: 10, cha: 8 };
-		ch.gear.armor = 'hide';
+		ch.gear.items.push(newArmorItem('hide'));
 		ch.attacks = [
 			newAttack({ name: 'Greataxe', weapon: 'greataxe', dice: '1d12', props: 'Heavy, Two-Handed' })
 		];
@@ -406,9 +432,9 @@ describe('situational effects', () => {
 	it('a shield adds 2 to AC', () => {
 		const ch = blankCharacter();
 		ch.classId = 'fighter';
-		ch.gear.armor = 'chainmail';
+		ch.gear.items.push(newArmorItem('chainmail'));
 		const base = armorClass(ch).value;
-		ch.gear.shield = true;
+		ch.gear.items.push(newArmorItem('shield'));
 		expect(armorClass(ch).value).toBe(base + 2);
 		expect(armorClass(ch).parts).toContain('Shield +2');
 	});
@@ -592,11 +618,11 @@ describe('rules details', () => {
 		const ch = blankCharacter();
 		ch.classId = 'fighter';
 		ch.abilities.str = 10;
-		ch.gear.armor = 'chainmail'; // Str 13
+		ch.gear.items.push(newArmorItem('chainmail')); // Str 13
 		expect(speed(ch)).toBe(20);
 		ch.abilities.str = 13;
 		expect(speed(ch)).toBe(30);
-		ch.gear.armor = 'ringmail'; // no Strength requirement
+		ch.gear.items = [newArmorItem('ringmail')]; // no Strength requirement
 		ch.abilities.str = 8;
 		expect(speed(ch)).toBe(30);
 	});
@@ -629,13 +655,71 @@ describe('rules details', () => {
 	});
 });
 
+describe('equipment items', () => {
+	it('custom armor sets AC: base, Dex limit, magic bonus; shields add up', () => {
+		const ch = blankCharacter();
+		ch.abilities.dex = 18; // +4
+		const mail = newArmorItem('', { name: 'Mithral Shirt +1' });
+		mail.armor = { type: 'medium', base: 13, dexCap: 2, str: 0, stealthDis: false, bonus: 1 };
+		ch.gear.items.push(mail);
+		expect(armorClass(ch).value).toBe(13 + 2 + 1);
+		mail.armor.dexCap = null;
+		expect(armorClass(ch).value).toBe(13 + 4 + 1);
+		mail.equipped = false;
+		expect(armorClass(ch).value).toBe(14); // unarmored 10 + Dex
+		const sh = newArmorItem('shield', { name: 'Shield +1' });
+		sh.armor!.bonus = 1;
+		ch.gear.items.push(sh);
+		expect(armorClass(ch).value).toBe(14 + 3);
+	});
+
+	it('heavy armor ignores a negative Dexterity modifier', () => {
+		const ch = blankCharacter();
+		ch.abilities.dex = 6; // -2
+		ch.gear.items.push(newArmorItem('plate'));
+		expect(armorClass(ch).value).toBe(18);
+	});
+
+	it('old saves are converted: worn armor, shield, weapons and riders become items', () => {
+		const old = {
+			...blankCharacter(),
+			attacks: [
+				newAttack({ name: 'Longsword', weapon: 'longsword', dice: '1d8' }),
+				newAttack({ name: 'Fire Bolt', kind: 'spell', spell: 'Fire Bolt' })
+			],
+			riders: [
+				{ id: 'x', name: 'Flame', dmg: '2d6', type: 'Fire', hit: 0, applies: 'melee', when: 'lit' }
+			],
+			gear: {
+				armor: 'chainmail',
+				shield: true,
+				acMisc: 0,
+				items: [newItem({ name: 'Longsword', weight: 3 })],
+				coins: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
+			}
+		};
+		const ch = normalize(old);
+		expect(ch.gear.items.filter((i) => i.kind === 'armor').map((i) => i.name)).toEqual([
+			'Chain Mail',
+			'Shield'
+		]);
+		expect(armorClass(ch).value).toBe(16 + 2);
+		const sword = ch.gear.items.filter((i) => i.kind === 'weapon');
+		expect(sword.length).toBe(1); // the existing Longsword item was reused
+		expect(sword[0].atk?.extras[0]).toMatchObject({ dmg: '2d6', type: 'Fire', always: false });
+		expect(ch.attacks.map((a) => a.name)).toEqual(['Fire Bolt']);
+		expect('riders' in ch).toBe(false);
+		expect(newWeaponItem('dagger').atk?.dice).toBe('1d4');
+	});
+});
+
 describe('advantage and disadvantage', () => {
 	it('collects sources and marks skills and saves', () => {
 		const ch = blankCharacter();
 		ch.classId = 'barbarian';
 		ch.level = 7;
 		ch.speciesId = 'gnome';
-		ch.gear.armor = 'scale';
+		ch.gear.items.push(newArmorItem('scale'));
 		const adv = advantages(ch);
 		expect(advMarker(advForSave(adv, 'wis'))?.text).toBe('ADV'); // Gnomish Cunning
 		expect(advMarker(advForSave(adv, 'dex'))?.text).toBe('adv*'); // Danger Sense, conditional

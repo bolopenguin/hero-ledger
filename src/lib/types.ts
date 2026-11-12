@@ -224,10 +224,23 @@ export interface Attack {
 	notes: string;
 	/** Rider id -> active (no longer used: riders are listed, not ticked). */
 	riders: Record<string, boolean>;
+	/** Extra damage this weapon or spell adds: dice, a damage type, and when it applies. */
+	extras: AttackExtra[];
 	/** The target makes this saving throw instead of you rolling to hit (Sacred Flame, Burning Hands…). */
 	save?: Ab | '';
 	/** Spell this attack was made from, so it can be kept in sync. */
 	spell?: string;
+}
+
+/** Extra damage on one attack, e.g. a Flame Tongue's 2d6 Fire. */
+export interface AttackExtra {
+	id: string;
+	dmg: string;
+	type: string;
+	/** Free text: "while ignited", "against Undead". */
+	when: string;
+	/** Counted in the damage line; otherwise it is only listed under the attack. */
+	always: boolean;
 }
 
 export interface Rider {
@@ -311,9 +324,28 @@ export interface Spell {
 	notes: string;
 }
 
+/** What an armor or shield item does to Armor Class. */
+export interface ArmorStats {
+	type: 'light' | 'medium' | 'heavy' | 'shield';
+	/** Armor: base AC. Shield: the AC bonus it gives. */
+	base: number;
+	/** Most Dexterity bonus allowed: null for no limit, 0 for none. Ignored for shields. */
+	dexCap: number | null;
+	/** Strength score needed to wear it without a Speed penalty (0 for none). */
+	str: number;
+	stealthDis: boolean;
+	/** Magic bonus to AC, e.g. +1 for Chain Mail +1. */
+	bonus: number;
+}
+
 export interface Item {
 	id: string;
 	name: string;
+	/** Weapons and armor have their own section and stats; everything else is a plain item. */
+	kind: 'item' | 'weapon' | 'armor';
+	/** Weapon stats; the weapon makes an attack in the Combat tab while it is equipped. */
+	atk?: Attack;
+	armor?: ArmorStats;
 	qty: number;
 	weight: number;
 	value: number;
@@ -363,8 +395,8 @@ export interface Character {
 	exhaustion: number;
 	inspiration: boolean;
 	prof: { armor: string; weapons: string; tools: string; languages: string; senses: string };
+	/** Spell attacks and anything else that is not a weapon in your equipment. */
 	attacks: Attack[];
-	riders: Rider[];
 	picks: Record<string, Pick>;
 	/** Feature key -> chosen option keys (invocations, metamagic, maneuvers…). */
 	choices: Record<string, string[]>;
@@ -375,8 +407,7 @@ export interface Character {
 	used: Record<string, number>;
 	spells: { ability: Ab | ''; slotsUsed: number[]; pactUsed: number; list: Spell[] };
 	gear: {
-		armor: string;
-		shield: boolean;
+		/** Other AC bonuses that are not an item's own (a feat, a spell, a house rule). */
 		acMisc: number;
 		items: Item[];
 		coins: { cp: number; sp: number; ep: number; gp: number; pp: number };

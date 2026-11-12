@@ -18,6 +18,7 @@
 	import { AB_NAMES, SKILLS } from '$lib/data/srd';
 	import { ABILITIES } from '$lib/types';
 	import { uid } from '$lib/store.svelte';
+	import BackgroundScores from './BackgroundScores.svelte';
 	import ClassSummary from './ClassSummary.svelte';
 	import FeatureCard from './FeatureCard.svelte';
 	import OptionChooser from './OptionChooser.svelte';
@@ -54,12 +55,10 @@
 	}
 	const sp = $derived(getSpecies(ch));
 	const bg = $derived(getBackground(ch));
-	const lineage = $derived(sp?.lineages?.find((l) => l.id === ch.lineage)?.name);
-	const bgAsi = $derived(
-		ABILITIES.filter((ab) => ch.bgAsi[ab])
-			.map((ab) => `+${ch.bgAsi[ab]} ${AB_NAMES[ab]}`)
-			.join(', ')
+	const scoresTodo = $derived(
+		!!bg && Object.values(ch.bgAsi).reduce((a, b) => a + (b ?? 0), 0) !== 3
 	);
+	const lineage = $derived(sp?.lineages?.find((l) => l.id === ch.lineage)?.name);
 	const filters = [
 		['all', 'All'],
 		['action', 'Actions'],
@@ -110,13 +109,18 @@
 	<div
 		class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-base-300 pt-2 text-sm"
 	>
-		{#if todo.length || startTodo.length}
+		{#if todo.length || startTodo.length || scoresTodo}
 			<span class="font-semibold text-warning">Still to choose:</span>
 			{#each todo as f (f.key)}
 				<button type="button" class="link link-hover" onclick={() => jump(featureAnchor(f.key))}
 					>{f.n}{originOf(f) ? '' : ` (level ${f.l})`}</button
 				>
 			{/each}
+			{#if scoresTodo}<button
+					type="button"
+					class="link link-hover"
+					onclick={() => jump('origin-background')}>Background ability scores</button
+				>{/if}
 			{#each startTodo as cd (cd.key)}
 				<button
 					type="button"
@@ -173,13 +177,6 @@
 							<span class="font-display text-lg font-bold">{bg.name}</span>
 						</div>
 						<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
-							<dt class="font-semibold">Ability scores</dt>
-							<dd class={bgAsi ? '' : 'text-warning'}>
-								{bgAsi ||
-									(bg.freeAsi
-										? `Choose on the Sheet tab: +1 or more to one of ${bg.abilities.map((ab) => AB_NAMES[ab]).join(', ')}, the other points to any score (max +2 each).`
-										: `Choose +2/+1 or +1/+1/+1 from ${bg.abilities.map((ab) => AB_NAMES[ab]).join(', ')} on the Sheet tab.`)}
-							</dd>
 							<dt class="font-semibold">Skills</dt>
 							<dd>
 								{[
@@ -193,6 +190,7 @@
 							<dt class="font-semibold">Tool</dt>
 							<dd>{backgroundTool(ch) || '—'}</dd>
 						</dl>
+						<BackgroundScores />
 						{#each startingChoices(ch).filter( (x) => x.key.endsWith(':background') ) as cd (cd.key)}<OptionChooser
 								choice={cd}
 							/>{/each}

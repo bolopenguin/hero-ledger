@@ -21,7 +21,7 @@
 		toolProficiencies
 	} from '$lib/calc';
 	import { CLASSES } from '$lib/data/classes';
-	import { AB_NAMES, ALIGNMENTS, ARMOR, BACKGROUNDS, SKILLS, SPECIES } from '$lib/data/srd';
+	import { AB_NAMES, ALIGNMENTS, BACKGROUNDS, SKILLS, SPECIES } from '$lib/data/srd';
 	import { allPackSpecies, packs, packSubclasses } from '$lib/packs.svelte';
 	import { ABILITIES, type Ab } from '$lib/types';
 	import Stat from './Stat.svelte';
@@ -71,21 +71,6 @@
 		if (sk[id].fromBg || sk[id].fromFeature) ch.skills[id] = eff === 2 ? 0 : 2;
 		else ch.skills[id] = (eff + 1) % 3;
 	}
-	function setBgAsi(mode: string) {
-		const abs = bg?.abilities ?? [];
-		if (mode === '111') ch.bgAsi = Object.fromEntries(abs.slice(0, 3).map((a) => [a, 1]));
-		else ch.bgAsi = {};
-	}
-	const bgPoints = $derived(Object.values(ch.bgAsi).reduce((a, b) => a + (b ?? 0), 0));
-	const bgAsiProblem = $derived.by(() => {
-		if (!bg || !bgPoints) return '';
-		const vals = Object.entries(ch.bgAsi).filter(([, v]) => v);
-		if (vals.some(([, v]) => (v ?? 0) > 2)) return 'no score above +2';
-		if (bg.freeAsi && !vals.some(([ab]) => bg.abilities.includes(ab as Ab)))
-			return `put at least +1 on ${bg.abilities.map((a) => a.toUpperCase()).join(', ')}`;
-		return '';
-	});
-
 	// Skill proficiencies the player picks by hand (background skills come automatically).
 	const classSkillList = $derived(
 		cls?.skills.list === 'any' ? null : new Set(cls?.skills.list ?? [])
@@ -344,35 +329,6 @@
 					/></label
 				>
 			{/if}
-
-			{#if bg}
-				<div class="flex flex-wrap items-center gap-2 text-sm sm:col-span-2 lg:col-span-4">
-					<span class="label-xs">Background ability scores</span>
-					<span class="text-xs {bgAsiProblem ? 'text-warning' : 'text-base-content/60'}"
-						>{bg.freeAsi
-							? `+2 and +1, or +1/+1/+1: at least +1 to ${bg.abilities.map((a) => a.toUpperCase()).join(', ')} (one of them), the rest to any score`
-							: `+2 and +1, or +1 to three of ${bg.abilities.map((a) => a.toUpperCase()).join(', ')}`}
-						({bgPoints}/3){bgAsiProblem ? ` · ${bgAsiProblem}` : ''}</span
-					>
-					{#each bg.freeAsi ? ABILITIES : bg.abilities as ab (ab)}
-						<label class="flex items-center gap-1">
-							<span class="text-xs uppercase">{ab}</span>
-							<select
-								class="select w-14 select-xs"
-								value={String(ch.bgAsi[ab] ?? 0)}
-								onchange={(e) => (ch.bgAsi = { ...ch.bgAsi, [ab]: Number(e.currentTarget.value) })}
-							>
-								<option value="0">+0</option><option value="1">+1</option><option value="2"
-									>+2</option
-								>
-							</select>
-						</label>
-					{/each}
-					<button type="button" class="btn btn-ghost btn-xs" onclick={() => setBgAsi('111')}
-						>+1 / +1 / +1</button
-					>
-				</div>
-			{/if}
 		</div>
 	</section>
 
@@ -612,28 +568,11 @@
 					<span class="text-lg">{sp?.size ?? '—'}</span>
 				</div>
 			</div>
-			<div
-				class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-base-300 pt-2 text-sm"
-			>
-				<label class="flex items-center gap-2"
-					><span class="label-xs">Armor</span>
-					<select class="select w-44 select-xs" bind:value={ch.gear.armor}>
-						<option value="">None</option>
-						{#each ['light', 'medium', 'heavy'] as t (t)}
-							<optgroup label="{t[0].toUpperCase()}{t.slice(1)} armor">
-								{#each Object.entries(ARMOR).filter(([, a]) => a.type === t) as [k, a] (k)}<option
-										value={k}>{a.name}</option
-									>{/each}
-							</optgroup>
-						{/each}
-					</select></label
-				>
-				<label class="flex items-center gap-2"
-					><input type="checkbox" class="checkbox checkbox-xs" bind:checked={ch.gear.shield} /> Shield
-					(+2 AC)</label
-				>
-				<span class="text-xs text-base-content/55">{ac.parts.join(' · ')}</span>
-			</div>
+			<p class="mt-2 text-xs text-base-content/65">
+				<span class="label-xs">Armor Class</span>
+				{ac.parts.join(' · ')}. Wear armor and a shield in the
+				<a href="#inventory" class="link">Inventory</a>.
+			</p>
 			{#if darkvision(ch) || ac.stealthDis}
 				<p class="mt-2 text-xs text-base-content/65">
 					{#if darkvision(ch)}Darkvision {darkvision(ch)} ft.{/if}

@@ -7,14 +7,14 @@ The web app does the bookkeeping; the printed PDF is what you play with.
 ## What it does
 
 - **Build a character**: pick class, subclass, species and background. Features appear level by level, with their text, uses and recharge worked out from your level and ability scores.
-- **Make your choices**: ability scores or a feat at each ASI level, fighting styles (or Blessed / Druidic Warrior and their cantrips), Weapon Mastery, Expertise, class options such as Divine Order or Circle of the Land, the spells and skills your feats and species let you pick, and the tools your class and background let you pick. Choices change the numbers: training, skills, cantrips, spells, damage riders.
+- **Make your choices**: ability scores or a feat at each ASI level, fighting styles (or Blessed / Druidic Warrior and their cantrips), Weapon Mastery, Expertise, class options such as Divine Order or Circle of the Land, the spells and skills your feats and species let you pick, and the tools your class and background let you pick. Choices change the numbers: training, skills, cantrips, spells, extra damage.
 - **Class & features tab**: the key numbers of your class (Rage, Sneak Attack, Focus Points, Sorcery Points, Pact slots…), a list of the choices you still have to make, your origin (species, lineage, background with its ability scores, skills, tool and feat), then everything your class gives you, level by level.
-- **Attacks**: hit and damage for each weapon or spell attack, with the extra damage that applies only sometimes (Sneak Attack, Divine Smite, Rage, Hunter's Mark, your own) listed under it.
+- **Attacks**: hit and damage for each equipped weapon and each spell attack, with the extra damage that applies only sometimes (Sneak Attack, Divine Smite, Rage, Hunter's Mark, a weapon's own extra dice) listed under it.
 - **Situational effects** (Rage, Mage Armor, Hunter's Mark, Haste…) are listed with what they change, and the PDF prints the AC you get with each one.
 - **Your turn**: what you can do as an Action, Bonus Action and Reaction, built from your attacks, spells, features and items.
 - **Spells**: spell slots, DC and attack; spells your features give you are filled in and labelled (always prepared, free once per rest, at will, ritual only).
-- **Inventory**: an equipment catalog with cost, weight and what each item does, containers, attunement, coins and carrying capacity.
-- **Everything can be customised**: every calculated number takes a bonus or a replacement value, every feature can be reworded, annotated or hidden, and you can add your own features, feats, riders, class, subclass, species or background. Custom text supports live formulas such as `{8 + wis + pb}`.
+- **Inventory**: separate lists for armor and shields, weapons, money and other equipment. Armor and weapons can be taken from the rules or made from scratch (base AC, Dex limit, magic bonus; damage dice, magic bonus, extra damage dice such as a Flame Tongue's 2d6 Fire). Wearing armor sets your AC and equipped weapons become your attacks. Also an equipment catalog, containers, attunement and carrying capacity.
+- **Everything can be customised**: every calculated number takes a bonus or a replacement value, every feature can be reworded, annotated or hidden, and you can add your own features, feats, weapons, armor, class, subclass, species or background. Custom text supports live formulas such as `{8 + wis + pb}`.
 - **PDF export and re-import**: a fillable PDF (HP, uses, slots, coins…) that carries the whole character inside it. Load it back with **Open** and anything typed into its fields is picked up.
 
 Characters are stored in your browser and in the files you save. There is no server.
