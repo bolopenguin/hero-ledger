@@ -50,7 +50,7 @@ export const CLASSES: Record<string, ClassDef> = {
 				l: 1,
 				n: 'Rage',
 				a: 'bonus',
-				r: 'long',
+				r: 'short1',
 				u: (c) =>
 					by(c.l, [
 						[1, 2],
@@ -242,7 +242,8 @@ export const CLASSES: Record<string, ClassDef> = {
 				l: 1,
 				n: 'Bardic Inspiration',
 				a: 'bonus',
-				r: 'long',
+				// Font of Inspiration (level 5) makes Short Rests restore it too.
+				r: (c) => (c.l >= 5 ? 'short' : 'long'),
 				u: (c) => Math.max(1, c.m('cha')),
 				d: (c) =>
 					`Bonus Action: give a creature within 60 ft a d${by(c.l, [
@@ -435,7 +436,7 @@ export const CLASSES: Record<string, ClassDef> = {
 				n: 'Improved Blessed Strikes',
 				a: 'passive',
 				d: (c) =>
-					`Divine Strike becomes 2d8. Potent Spellcasting: when a cantrip deals damage, you or a creature within 60 ft gains ${2 * Math.max(1, c.m('wis'))} Temporary HP.`
+					`Divine Strike becomes 2d8. Potent Spellcasting: when a cantrip deals damage, you or a creature within 60 ft gains ${Math.max(0, 2 * c.m('wis'))} Temporary HP (twice your Wis mod).`
 			},
 			ASI(16),
 			SUB(17, 'Cleric'),
@@ -1113,7 +1114,7 @@ export const CLASSES: Record<string, ClassDef> = {
 				n: 'Abjure Foes',
 				a: 'action',
 				d: (c) =>
-					`Channel Divinity (Magic action): up to ${Math.max(1, c.m('cha'))} creatures within 60 ft make a Wis save or are Frightened for 1 min; while Frightened they can only move, act, or take a Bonus Action each turn.`
+					`Channel Divinity (Magic action): up to ${Math.max(1, c.m('cha'))} ${Math.max(1, c.m('cha')) === 1 ? 'creature' : 'creatures'} within 60 ft make a Wis save or are Frightened for 1 min; while Frightened they can only move, act, or take a Bonus Action each turn.`
 			},
 			{
 				l: 10,

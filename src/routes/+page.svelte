@@ -26,23 +26,19 @@
 	import { getClass, subclassName } from '$lib/calc';
 	import SheetTab from '$lib/components/SheetTab.svelte';
 	import CombatTab from '$lib/components/CombatTab.svelte';
-	import ClassTab from '$lib/components/ClassTab.svelte';
 	import TurnTab from '$lib/components/TurnTab.svelte';
 	import FeaturesTab from '$lib/components/FeaturesTab.svelte';
 	import SpellsTab from '$lib/components/SpellsTab.svelte';
 	import InventoryTab from '$lib/components/InventoryTab.svelte';
-	import NotesTab from '$lib/components/NotesTab.svelte';
 
 	let ready = $state(false);
 	const tabs = [
 		['sheet', 'Sheet'],
-		['class', 'Class'],
 		['combat', 'Combat'],
 		['turn', 'Your turn'],
-		['features', 'Features'],
+		['features', 'Class & features'],
 		['spells', 'Spells'],
-		['inventory', 'Inventory'],
-		['notes', 'Notes']
+		['inventory', 'Inventory']
 	] as const;
 	type Tab = (typeof tabs)[number][0];
 	let tab = $state<Tab>('sheet');
@@ -63,7 +59,8 @@
 			/* ignore */
 		}
 		const fromHash = () => {
-			const h = location.hash.slice(1);
+			// #class was the old Class tab, now part of Class & features.
+			const h = location.hash.slice(1) === 'class' ? 'features' : location.hash.slice(1);
 			if (tabs.some(([k]) => k === h)) tab = h as Tab;
 		};
 		fromHash();
@@ -344,13 +341,11 @@
 
 	<main class="mx-auto max-w-7xl px-4 py-4">
 		{#if tab === 'sheet'}<SheetTab />
-		{:else if tab === 'class'}<ClassTab />
 		{:else if tab === 'combat'}<CombatTab />
 		{:else if tab === 'turn'}<TurnTab />
 		{:else if tab === 'features'}<FeaturesTab />
 		{:else if tab === 'spells'}<SpellsTab />
-		{:else if tab === 'inventory'}<InventoryTab />
-		{:else}<NotesTab />{/if}
+		{:else}<InventoryTab />{/if}
 		<footer class="mt-8 text-center text-xs text-base-content/50">
 			Rules summaries based on the System Reference Document 5.2 by Wizards of the Coast LLC,
 			licensed under

@@ -1,4 +1,4 @@
-// Key numbers for each class, shown at the top of the Class tab (D&D 2024 rules).
+// Key numbers for each class, shown at the top of the Class & features tab (D&D 2024 rules).
 import { by } from './data/classes';
 import { chosenOptions, makeCtx, scores, signed, spellcasting } from './calc';
 import type { Character } from './types';

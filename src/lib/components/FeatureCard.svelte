@@ -1,16 +1,10 @@
 <script lang="ts">
 	import { Pencil, Eye, EyeOff, Trash2, RotateCcw } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import {
-		allFeats,
-		allOptions,
-		featAbilities,
-		featAsiPoints,
-		makeCtx,
-		scores,
-		type RFeature
-	} from '$lib/calc';
-	import { fillTemplate } from '$lib/formula';
+	import { allFeats, featAbilities, featAsiPoints, featureAnchor, type RFeature } from '$lib/calc';
+	import { rulesText } from '$lib/packs.svelte';
+	import RulesText from './RulesText.svelte';
+	import OptionChooser from './OptionChooser.svelte';
 	import { ACTION_LABELS, AB_NAMES } from '$lib/data/srd';
 	import { ABILITIES, type ActionType, type PickKind, type Recharge } from '$lib/types';
 
@@ -18,6 +12,7 @@
 	const ch = $derived(currentChar());
 	let editing = $state(false);
 
+	const full = $derived(f.tkey && !f.edited ? rulesText(f.tkey) : null);
 	const custom = $derived(f.customId ? ch.features.find((x) => x.id === f.customId) : undefined);
 	const pick = $derived(ch.picks[f.key]);
 	const rechargeLabel: Record<string, string> = {
@@ -51,10 +46,13 @@
 					: kind === 'epic'
 						? ['epic', 'general', 'origin']
 						: ['general', 'origin', 'style'];
+		const only = f.pickFrom ? new Set(f.pickFrom) : null;
 		return Object.entries(feats)
 			.filter(
 				([k, d]) =>
-					k !== 'asi' && cats.includes(d.cat) && (!d.forClass || d.forClass === ch.classId)
+					k !== 'asi' &&
+					(only ? only.has(k) : cats.includes(d.cat)) &&
+					(!d.forClass || d.forClass === ch.classId)
 			)
 			.sort(
 				(a, b) =>
@@ -79,14 +77,16 @@
 		if (pick) pick.asi = { [ab]: 1 };
 	}
 
-	// Option lists: invocations, metamagic, maneuvers…
-	const ctx = $derived(makeCtx(ch, scores(ch)));
-	const optList = $derived(f.choose ? allOptions(ch)[f.choose.list] : undefined);
-	const chosen = $derived(f.choose ? (ch.choices[f.key] ?? []) : []);
-	let showOptions = $state(false);
-	function toggleOption(k: string) {
-		const cur = ch.choices[f.key] ?? [];
-		ch.choices[f.key] = cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k];
+	// Fighting Style: some classes may take a class-specific alternative (Blessed or Druidic
+	// Warrior) instead of a Fighting Style feat.
+	const styleAlt = $derived(
+		f.pick === 'style'
+			? Object.entries(allFeats()).find(([, d]) => d.cat === 'style' && d.forClass === ch.classId)
+			: undefined
+	);
+	const styleMode = $derived(!pick?.feat ? '' : pick.feat === styleAlt?.[0] ? 'alt' : 'feat');
+	function setStyleMode(m: 'alt' | 'feat') {
+		ch.picks[f.key] = { feat: m === 'alt' && styleAlt ? styleAlt[0] : '', asi: {} };
 	}
 
 	function setEdit(field: 'n' | 'd' | 'notes', v: string) {
@@ -103,7 +103,12 @@
 	}
 </script>
 
-<article class="border-b border-base-300 py-2.5 last:border-b-0 {f.hidden ? 'opacity-50' : ''}">
+<article
+	id={compact ? undefined : featureAnchor(f.key)}
+	class="scroll-mt-28 border-b border-base-300 py-2.5 last:border-b-0 {f.hidden
+		? 'opacity-50'
+		: ''}"
+>
 	<header class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
 		<h4 class="font-display text-base font-bold">{f.n}</h4>
 		{#if !compact}<span class="text-xs font-semibold tracking-wide uppercase {srcColor[f.src]}"
@@ -144,6 +149,7 @@
 		</p>
 	{/if}
 	{#if f.d}<p class="desc mt-1 whitespace-pre-line">{f.d}</p>{/if}
+	{#if full && !compact}<RulesText text={full} />{/if}
 	{#if f.notes}<p
 			class="mt-1 border-l-2 border-secondary pl-2 text-sm whitespace-pre-line text-base-content/80"
 		>
@@ -176,7 +182,36 @@
 					>
 				</div>
 			{/if}
-			{#if !asiSlot || mode === 'feat'}
+			{#if styleAlt}
+				<div
+					class="flex flex-wrap items-center gap-4 text-sm"
+					role="radiogroup"
+					aria-label="{f.n} choice"
+				>
+					<label class="flex items-center gap-1.5"
+						><input
+							type="radio"
+							class="radio radio-xs radio-primary"
+							checked={styleMode === 'feat' || (!!pick && !pick.feat)}
+							onchange={() => setStyleMode('feat')}
+						/> Fighting Style feat</label
+					>
+					<label class="flex items-center gap-1.5"
+						><input
+							type="radio"
+							class="radio radio-xs radio-primary"
+							checked={styleMode === 'alt'}
+							onchange={() => setStyleMode('alt')}
+						/>
+						{styleAlt[1].name}</label
+					>
+				</div>
+			{/if}
+			{#if styleMode === 'alt'}
+				<p class="text-xs text-base-content/60">
+					Pick the cantrips in the {styleAlt?.[1].name} entry below.
+				</p>
+			{:else if !asiSlot || mode === 'feat'}
 				<label class="flex flex-wrap items-center gap-2 text-sm">
 					<span class="font-medium">Feat</span>
 					<select
@@ -185,7 +220,7 @@
 						onchange={(e) => setPick(e.currentTarget.value)}
 					>
 						<option value="">— choose —</option>
-						{#each featOptions(f.pick) as [k, d] (k)}
+						{#each featOptions(f.pick).filter(([k]) => k !== styleAlt?.[0]) as [k, d] (k)}
 							<option value={k}>{d.name} · {catLabel[d.cat]}</option>
 						{/each}
 						<option value="custom">Other feat (write it in)</option>
@@ -249,59 +284,7 @@
 		</div>
 	{/if}
 
-	{#if f.choose}
-		<div class="mt-2 flex flex-col gap-1.5 {compact ? '' : 'rounded-box bg-base-200 p-2'}">
-			{#if !compact}
-				<div class="flex flex-wrap items-center gap-2 text-sm">
-					<span class="font-medium">{optList?.label ?? f.choose.list}</span>
-					<span class={chosen.length > f.choose.count ? 'text-error' : 'text-base-content/60'}
-						>{chosen.length}/{f.choose.count} chosen</span
-					>
-					{#if optList}<button
-							type="button"
-							class="btn ml-auto btn-xs"
-							onclick={() => (showOptions = !showOptions)}>{showOptions ? 'Done' : 'Choose'}</button
-						>{/if}
-				</div>
-				{#if !optList}<p class="text-xs text-base-content/60">
-						Load a content pack with this option list to pick them here, or add each one as a custom
-						feature.
-					</p>{/if}
-			{/if}
-			{#each chosen as k (k)}
-				{@const it = optList?.items[k]}
-				{#if it}<p class="text-sm">
-						<b>{it.name}.</b> <span class="text-base-content/80">{fillTemplate(it.d, ctx)}</span>
-					</p>{/if}
-			{/each}
-			{#if showOptions && optList && !compact}
-				<ul class="mt-1 flex max-h-80 flex-col gap-1 overflow-y-auto border-t border-base-300 pt-2">
-					{#each Object.entries(optList.items) as [k, it] (k)}
-						{@const on = chosen.includes(k)}
-						{@const tooLow = (it.l ?? 1) > ch.level}
-						<li>
-							<label class="flex items-start gap-2 text-sm {tooLow ? 'opacity-50' : ''}">
-								<input
-									type="checkbox"
-									class="checkbox mt-0.5 checkbox-xs"
-									checked={on}
-									disabled={!on && (tooLow || chosen.length >= f.choose.count)}
-									onchange={() => toggleOption(k)}
-								/>
-								<span
-									><b>{it.name}</b>{#if (it.l ?? 1) > 1}<span class="text-xs text-base-content/60">
-											· level {it.l}+</span
-										>{/if}{#if it.prereq}<span class="text-xs text-base-content/60">
-											· needs {it.prereq}</span
-										>{/if} <span class="text-base-content/75">{fillTemplate(it.d, ctx)}</span></span
-								>
-							</label>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</div>
-	{/if}
+	{#each f.choose ?? [] as cd (cd.key)}<OptionChooser choice={cd} {compact} />{/each}
 
 	{#if editing}
 		<div class="mt-2 flex flex-col gap-2 rounded-box bg-base-200 p-2">

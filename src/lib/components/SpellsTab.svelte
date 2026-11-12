@@ -14,9 +14,10 @@
 	import { PREP_RULE } from '$lib/classStats';
 	import { AB_NAMES } from '$lib/data/srd';
 	import { newAttack, newSpell } from '$lib/store.svelte';
-	import { allPackSpells } from '$lib/packs.svelte';
+	import { allPackSpells, rulesKey, rulesText } from '$lib/packs.svelte';
 	import { ABILITIES, type SpellDef } from '$lib/types';
 	import Stat from './Stat.svelte';
+	import RulesText from './RulesText.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -461,6 +462,7 @@
 								>
 							</tr>
 							{#if openDesc[sp.id]}
+								{@const full = rulesText(rulesKey('spell', sp.name))}
 								<tr>
 									<td></td>
 									<td colspan="12">
@@ -478,6 +480,7 @@
 										></textarea>
 										{#if sp.school}<span class="text-xs text-base-content/50">{sp.school}</span
 											>{/if}
+										{#if full}<RulesText text={full} />{/if}
 									</td>
 								</tr>
 							{/if}

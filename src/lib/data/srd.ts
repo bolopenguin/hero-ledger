@@ -178,6 +178,7 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				l: 1,
 				n: 'Keen Senses',
 				a: 'passive',
+				choose: { list: 'skills:insight,perception,survival', count: '1', label: 'Skill' },
 				d: 'Proficiency in Insight, Perception or Survival.'
 			},
 			{
@@ -197,7 +198,10 @@ export const SPECIES: Record<string, SpeciesDef> = {
 		lineages: [
 			{
 				id: 'forest',
-				spells: [{ l: 1, names: ['Minor Illusion', 'Speak with Animals'] }],
+				spells: [
+					{ l: 1, names: ['Minor Illusion'] },
+					{ l: 1, names: ['Speak with Animals'], kind: 'free' }
+				],
 				name: 'Forest Gnome',
 				d: 'Minor Illusion cantrip. Speak with Animals always prepared, cast without a slot PB times per Long Rest.'
 			},
@@ -328,7 +332,13 @@ export const SPECIES: Record<string, SpeciesDef> = {
 				a: 'passive',
 				d: 'You gain Heroic Inspiration whenever you finish a Long Rest.'
 			},
-			{ l: 1, n: 'Skillful', a: 'passive', d: 'Proficiency in one skill of your choice.' },
+			{
+				l: 1,
+				n: 'Skillful',
+				a: 'passive',
+				choose: { list: 'skills', count: '1', label: 'Skill' },
+				d: 'Proficiency in one skill of your choice.'
+			},
 			{
 				l: 1,
 				n: 'Versatile',
@@ -462,6 +472,15 @@ const magicInitiate = (list: string): FeatDef => ({
 	name: `Magic Initiate (${list})`,
 	cat: 'origin',
 	repeatable: true,
+	choose: [
+		{ list: `spells:${list.toLowerCase()}:0`, count: '2', label: `${list} cantrips` },
+		{
+			list: `spells:${list.toLowerCase()}:1`,
+			count: '1',
+			grant: 'free',
+			label: `Level 1 ${list} spell`
+		}
+	],
 	d: `Learn two ${list} cantrips and one level 1 ${list} spell (always prepared). Cast the level 1 spell once per Long Rest without a slot, or with slots. Spellcasting ability: Int, Wis or Cha (choose).`
 });
 
@@ -484,6 +503,7 @@ export const FEATS: Record<string, FeatDef> = {
 		name: 'Skilled',
 		cat: 'origin',
 		repeatable: true,
+		choose: { list: 'skills|tools:any', count: '3', label: 'Skills or tools' },
 		d: 'Proficiency in any combination of three skills or tools.'
 	},
 	asi: {
@@ -515,12 +535,14 @@ export const FEATS: Record<string, FeatDef> = {
 		name: 'Blessed Warrior',
 		cat: 'style',
 		forClass: 'paladin',
+		choose: { list: 'spells:cleric:0', count: '2', label: 'Cleric cantrips' },
 		d: 'Instead of a Fighting Style feat: learn two Cleric cantrips (they count as Paladin spells, Charisma). Swap one when you gain a Paladin level.'
 	},
 	'druidic-warrior': {
 		name: 'Druidic Warrior',
 		cat: 'style',
 		forClass: 'ranger',
+		choose: { list: 'spells:druid:0', count: '2', label: 'Druid cantrips' },
 		d: 'Instead of a Fighting Style feat: learn two Druid cantrips (they count as Ranger spells, Wisdom). Swap one when you gain a Ranger level.'
 	},
 	twf: {

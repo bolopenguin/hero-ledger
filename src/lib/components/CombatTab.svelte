@@ -5,24 +5,26 @@
 		attack,
 		attackFromSpell,
 		autoRiders,
+		availableStates,
 		features,
 		grantedSpells,
 		hitText,
 		masteredWeapons,
 		scores,
 		signed,
-		spellDamage
+		spellDamage,
+		stateSummary
 	} from '$lib/calc';
 	import { allPackSpells } from '$lib/packs.svelte';
 	import { AB_NAMES, ACTION_LABELS, MASTERIES, WEAPONS } from '$lib/data/srd';
 	import { newAttack, uid } from '$lib/store.svelte';
 	import { ABILITIES, type Attack, type Rider } from '$lib/types';
 	import FeatureCard from './FeatureCard.svelte';
-	import RightNow from './RightNow.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
-	const auto = $derived(autoRiders(ch, sc));
+	const auto = $derived(autoRiders(ch, sc).filter((x) => !x.state));
+	const situational = $derived(availableStates(ch, sc));
 	const mastered = $derived(masteredWeapons(ch));
 	const feats = $derived(features(ch).filter((f) => !f.hidden));
 	let open = $state<Record<string, boolean>>({});
@@ -110,14 +112,13 @@
 	};
 </script>
 
-<section class="panel mb-3" aria-label="Right now"><RightNow /></section>
-
 <div class="grid gap-3">
 	<section class="panel" aria-labelledby="attacks-h">
 		<div class="mb-2 flex flex-wrap items-center gap-2">
 			<h2 id="attacks-h" class="panel-title mb-0">Attacks</h2>
 			<span class="text-xs text-base-content/60"
-				>Tick the riders that apply in this situation to see the full damage.</span
+				>Damage includes bonuses that always apply; extra damage that only applies sometimes is
+				listed under each attack.</span
 			>
 			<span class="ml-auto flex gap-1">
 				<button type="button" class="btn btn-sm" onclick={() => add('melee')}
@@ -164,14 +165,14 @@
 								title="{AB_NAMES[r.ability]}{a.proficient ? ' + proficiency' : ''}"
 								>{r.dc !== null ? hitText(a, r) : signed(r.toHit)}</span
 							>
-							<span class="num text-sm">{r.base}</span>
-							<span class="text-sm text-base-content/60">{a.type}</span>
+							<span class="num text-sm">{r.total}</span>
+							<span class="text-sm text-base-content/60">{r.types || a.type}</span>
 						</button>
 						{#if a.mastery}<span
 								class="tag {mastered.has(a.weapon) ? '' : 'line-through opacity-60'}"
 								title={mastered.has(a.weapon)
 									? (MASTERIES[a.mastery] ?? '')
-									: 'You can use this mastery only if you pick this weapon in Weapon Mastery (Class tab)'}
+									: 'You can use this mastery only if you pick this weapon in Weapon Mastery (Class & features tab)'}
 								>{a.mastery}</span
 							>{/if}
 						{#if a.range}<span class="text-xs text-base-content/60">{a.range}</span>{/if}
@@ -196,29 +197,20 @@
 								Two hands (Versatile {a.versatile})
 							</label>
 						{/if}
-						{#if r.riders.length}
+						{#if r.riders.some((x) => !x.on)}
 							<ul class="flex flex-col gap-0.5">
-								{#each r.riders as x (x.r.id)}
+								{#each r.riders.filter((x) => !x.on) as x (x.r.id)}
 									<li class="flex items-baseline gap-2 text-sm">
-										<label class="flex min-w-0 flex-1 items-baseline gap-2">
-											<input
-												type="checkbox"
-												class="checkbox translate-y-0.5 checkbox-xs checkbox-primary"
-												checked={x.on}
-												disabled={!!x.r.state}
-												title={x.r.state ? 'Turn it on with the switches at the top' : ''}
-												onchange={(e) => (a.riders[x.r.id] = e.currentTarget.checked)}
-											/>
-											<span class="font-medium">{x.r.name}</span>
-											<span class="num"
-												>{x.r.dmg ? '+' + x.r.dmg : ''}{x.r.hit
-													? ` ${signed(x.r.hit)} to hit`
-													: ''}</span
-											>
-											<span class="truncate text-xs text-base-content/55"
-												>{x.r.type} {x.r.when ? '· ' + x.r.when : ''}</span
-											>
-										</label>
+										<span class="text-base-content/50">+</span>
+										<span class="font-medium">{x.r.name}</span>
+										<span class="num"
+											>{x.r.dmg ? '+' + x.r.dmg : ''}{x.r.hit
+												? ` ${signed(x.r.hit)} to hit`
+												: ''}</span
+										>
+										<span class="truncate text-xs text-base-content/55"
+											>{x.r.type} {x.r.when ? '· ' + x.r.when : ''}</span
+										>
 									</li>
 								{/each}
 							</ul>
@@ -394,7 +386,7 @@
 			<div class="mb-2 flex items-center gap-2">
 				<h3 class="panel-title mb-0">Damage riders</h3>
 				<span class="text-xs text-base-content/60"
-					>Extra damage that only applies sometimes. Each attack can switch them on or off.</span
+					>Extra damage that only applies sometimes, listed under the attacks it can add to.</span
 				>
 				<button type="button" class="btn ml-auto btn-sm" onclick={addRider}
 					><Plus class="size-4" /> Rider</button
@@ -462,4 +454,22 @@
 			</div>
 		</div>
 	</section>
+
+	{#if situational.length}
+		<section class="panel" aria-labelledby="sit-h">
+			<h2 id="sit-h" class="panel-title mb-0">Situational effects</h2>
+			<p class="text-xs text-base-content/60">
+				What changes while these last. The sheet's numbers leave them out; the PDF lists them with a
+				tick box to mark during play.
+			</p>
+			<dl class="mt-2 grid gap-x-6 gap-y-1.5 text-sm md:grid-cols-2">
+				{#each situational as st (st.id)}
+					<div>
+						<dt class="inline font-semibold">{st.name}.</dt>
+						<dd class="inline text-base-content/75">{stateSummary(ch, st, sc) || st.hint}</dd>
+					</div>
+				{/each}
+			</dl>
+		</section>
+	{/if}
 </div>

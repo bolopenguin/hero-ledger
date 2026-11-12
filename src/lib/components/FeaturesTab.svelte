@@ -1,9 +1,26 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { Plus } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { features, getClass, pbFor, subclassName } from '$lib/calc';
+	import {
+		backgroundTool,
+		darkvision,
+		features,
+		getBackground,
+		getSpecies,
+		featureAnchor,
+		openChoices,
+		originOf,
+		pbFor,
+		speed,
+		startingChoices
+	} from '$lib/calc';
+	import { AB_NAMES, SKILLS } from '$lib/data/srd';
+	import { ABILITIES } from '$lib/types';
 	import { uid } from '$lib/store.svelte';
+	import ClassSummary from './ClassSummary.svelte';
 	import FeatureCard from './FeatureCard.svelte';
+	import OptionChooser from './OptionChooser.svelte';
 
 	const ch = $derived(currentChar());
 	let showUpcoming = $state(false);
@@ -18,7 +35,31 @@
 				(filter === 'all' || (filter === 'picks' ? !!f.pick || f.src === 'Feat' : f.a === filter))
 		)
 	);
-	const levels = $derived([...new Set(list.map((f) => f.l))].sort((a, b) => a - b));
+	const origin = $derived(list.filter((f) => originOf(f)));
+	const byLevel = $derived(list.filter((f) => !originOf(f)));
+	const levels = $derived([...new Set(byLevel.map((f) => f.l))].sort((a, b) => a - b));
+	// Choices still to make (feats, options, background skill and tools), linked to their card.
+	const todo = $derived(openChoices(ch, features(ch)));
+	const startTodo = $derived(
+		startingChoices(ch).filter((cd) => (ch.choices[cd.key]?.length ?? 0) < cd.count)
+	);
+	async function jump(id: string) {
+		filter = 'all';
+		await tick();
+		const el = document.getElementById(id);
+		if (!el) return;
+		el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		el.classList.add('bg-warning/10');
+		setTimeout(() => el.classList.remove('bg-warning/10'), 1500);
+	}
+	const sp = $derived(getSpecies(ch));
+	const bg = $derived(getBackground(ch));
+	const lineage = $derived(sp?.lineages?.find((l) => l.id === ch.lineage)?.name);
+	const bgAsi = $derived(
+		ABILITIES.filter((ab) => ch.bgAsi[ab])
+			.map((ab) => `+${ch.bgAsi[ab]} ${AB_NAMES[ab]}`)
+			.join(', ')
+	);
 	const filters = [
 		['all', 'All'],
 		['action', 'Actions'],
@@ -34,12 +75,17 @@
 	}
 </script>
 
-<section class="panel" aria-labelledby="feat-h">
+<ClassSummary />
+{#each startingChoices(ch).filter((x) => x.key === 'tools:class') as cd (cd.key)}
+	<div id="class-tools" class="panel mt-3 scroll-mt-28">
+		<span class="label-xs">{cd.source}</span>
+		<OptionChooser choice={cd} />
+	</div>
+{/each}
+
+<section class="panel mt-3" aria-labelledby="feat-h">
 	<div class="flex flex-wrap items-center gap-2">
-		<h2 id="feat-h" class="panel-title mb-0">Features & feats by level</h2>
-		<span class="text-sm text-base-content/60">
-			{getClass(ch)?.name ?? 'No class'}{subclassName(ch) ? ` · ${subclassName(ch)}` : ''} · level {ch.level}
-		</span>
+		<h2 id="feat-h" class="panel-title mb-0">Features & feats</h2>
 		<button
 			type="button"
 			class="btn ml-auto btn-primary btn-sm"
@@ -61,9 +107,103 @@
 			><input type="checkbox" class="toggle toggle-xs" bind:checked={showHidden} /> Show hidden</label
 		>
 	</div>
+	<div
+		class="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-base-300 pt-2 text-sm"
+	>
+		{#if todo.length || startTodo.length}
+			<span class="font-semibold text-warning">Still to choose:</span>
+			{#each todo as f (f.key)}
+				<button type="button" class="link link-hover" onclick={() => jump(featureAnchor(f.key))}
+					>{f.n}{originOf(f) ? '' : ` (level ${f.l})`}</button
+				>
+			{/each}
+			{#each startTodo as cd (cd.key)}
+				<button
+					type="button"
+					class="link link-hover"
+					onclick={() => jump(cd.key === 'tools:class' ? 'class-tools' : 'origin-background')}
+					>{cd.key === 'tools:class'
+						? 'Tool'
+						: `Background ${(cd.label ?? 'choice').toLowerCase()}`}</button
+				>
+			{/each}
+		{:else}
+			<span class="text-success">Every choice for level {ch.level} is made.</span>
+		{/if}
+	</div>
 </section>
 
 <div class="mt-3 flex flex-col gap-3">
+	{#if sp || bg}
+		<section class="panel grid gap-x-4 sm:grid-cols-[5.5rem_minmax(0,1fr)]" aria-label="Origin">
+			<div class="flex flex-row items-baseline gap-2 sm:flex-col sm:gap-0">
+				<span class="font-display text-xl leading-tight font-bold text-primary">Origin</span>
+				<span class="text-xs text-base-content/50">species & background</span>
+			</div>
+			<div class="min-w-0">
+				{#if sp}
+					<div class="flex flex-wrap items-baseline gap-x-3 border-b border-base-300 pb-1.5">
+						<span class="label-xs">Species</span>
+						<span class="font-display text-lg font-bold"
+							>{sp.name}{lineage ? ` · ${lineage}` : ''}</span
+						>
+						<span class="text-sm text-base-content/60"
+							>{[
+								sp.size,
+								`Speed ${speed(ch)} ft`,
+								darkvision(ch) && !origin.some((f) => /darkvision/i.test(f.n))
+									? `Darkvision ${darkvision(ch)} ft`
+									: ''
+							]
+								.filter(Boolean)
+								.join(' · ')}</span
+						>
+						{#if sp.lineages?.length && !lineage}<span class="text-sm text-warning"
+								>Choose your {sp.lineageLabel ?? 'lineage'} on the Sheet tab.</span
+							>{/if}
+					</div>
+					{#each origin.filter((f) => originOf(f) === 'Species') as f (f.key)}<FeatureCard
+							{f}
+						/>{/each}
+				{/if}
+				{#if bg}
+					<div id="origin-background" class="mt-2 scroll-mt-28 border-b border-base-300 pb-1.5">
+						<div class="flex flex-wrap items-baseline gap-x-3">
+							<span class="label-xs">Background</span>
+							<span class="font-display text-lg font-bold">{bg.name}</span>
+						</div>
+						<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+							<dt class="font-semibold">Ability scores</dt>
+							<dd class={bgAsi ? '' : 'text-warning'}>
+								{bgAsi ||
+									(bg.freeAsi
+										? `Choose on the Sheet tab: +1 or more to one of ${bg.abilities.map((ab) => AB_NAMES[ab]).join(', ')}, the other points to any score (max +2 each).`
+										: `Choose +2/+1 or +1/+1/+1 from ${bg.abilities.map((ab) => AB_NAMES[ab]).join(', ')} on the Sheet tab.`)}
+							</dd>
+							<dt class="font-semibold">Skills</dt>
+							<dd>
+								{[
+									...bg.skills.map((k) => SKILLS[k]?.name ?? k),
+									...(ch.choices['skills:background'] ?? []).map((k) => SKILLS[k]?.name ?? k)
+								].join(', ') || '—'}{bg.skillChoice &&
+								(ch.choices['skills:background']?.length ?? 0) < (bg.skillChoice.count ?? 1)
+									? `${bg.skills.length ? ' + ' : ''}${bg.skillChoice.count ?? 1} to choose`
+									: ''}
+							</dd>
+							<dt class="font-semibold">Tool</dt>
+							<dd>{backgroundTool(ch) || '—'}</dd>
+						</dl>
+						{#each startingChoices(ch).filter( (x) => x.key.endsWith(':background') ) as cd (cd.key)}<OptionChooser
+								choice={cd}
+							/>{/each}
+					</div>
+					{#each origin.filter((f) => originOf(f) === 'Background') as f (f.key)}<FeatureCard
+							{f}
+						/>{/each}
+				{/if}
+			</div>
+		</section>
+	{/if}
 	{#each levels as l (l)}
 		<section
 			class="panel grid gap-x-4 sm:grid-cols-[5.5rem_minmax(0,1fr)] {l > ch.level
@@ -78,7 +218,7 @@
 				{#if l > ch.level}<span class="tag mt-1">upcoming</span>{/if}
 			</div>
 			<div class="min-w-0">
-				{#each list.filter((f) => f.l === l) as f (f.key)}<FeatureCard {f} />{/each}
+				{#each byLevel.filter((f) => f.l === l) as f (f.key)}<FeatureCard {f} />{/each}
 				<button
 					type="button"
 					class="btn mt-1 btn-ghost text-base-content/60 btn-xs"
@@ -87,7 +227,7 @@
 			</div>
 		</section>
 	{/each}
-	{#if !levels.length}
+	{#if !levels.length && !origin.length}
 		<p class="panel text-center text-sm text-base-content/60">Nothing matches this filter.</p>
 	{/if}
 </div>

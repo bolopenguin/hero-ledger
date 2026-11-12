@@ -8,6 +8,7 @@
 //   species.json        -> object of species
 //   backgrounds*.json   -> object of backgrounds
 //   options*.json       -> named option lists (invocations, metamagic, maneuvers)
+//   texts*.json         -> full rules texts by key ({ "spell/fireball": { full, page } })
 //   any other *.json    -> arrays of subclasses
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
@@ -31,7 +32,8 @@ const pack = {
 	feats: {},
 	species: {},
 	backgrounds: {},
-	options: {}
+	options: {},
+	texts: {}
 };
 const problems = [];
 
@@ -50,6 +52,7 @@ for (const f of readdirSync(dir)
 	else if (f.startsWith('species')) Object.assign(pack.species, data);
 	else if (f.startsWith('backgrounds')) Object.assign(pack.backgrounds, data);
 	else if (f.startsWith('options')) Object.assign(pack.options, data);
+	else if (f.startsWith('texts')) Object.assign(pack.texts, data);
 	else pack.subclasses.push(...data);
 }
 
@@ -75,7 +78,7 @@ pack.spells.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 
 writeFileSync(out, JSON.stringify(pack));
 console.log(
-	`${out}: ${pack.subclasses.length} subclasses, ${pack.spells.length} spells, ${Object.keys(pack.feats).length} feats`
+	`${out}: ${pack.subclasses.length} subclasses, ${pack.spells.length} spells, ${Object.keys(pack.feats).length} feats, ${Object.keys(pack.texts).length} rules texts`
 );
 if (problems.length) {
 	console.log('Problems:\n- ' + problems.join('\n- '));

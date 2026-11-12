@@ -23,11 +23,29 @@ import {
 	spellcasting,
 	subclassName
 } from '../calc';
-import { availableStates, grantedSpells, hitText, SPELL_KIND_LABEL, stateCtx } from '../calc';
+import {
+	allOptions,
+	availableStates,
+	backgroundTool,
+	originOf,
+	grantedSpells,
+	hitText,
+	optionList,
+	SPELL_KIND_LABEL,
+	stateSummary,
+	toolProficiencies
+} from '../calc';
 import { classStats } from '../classStats';
 import { advantages, advForSave, advForSkill, advLabel, advMarker } from '../advantage';
 import { turnSummary, TURN_HINT, TURN_LABEL, type TurnSlot } from '../turn';
-import { allPackOptions, allPackSpells } from '../packs.svelte';
+import {
+	allPackSpells,
+	rulesKey,
+	recapAddsNothing,
+	rulesText,
+	runIn as splitRunIn,
+	type RulesText
+} from '../packs.svelte';
 import { fillTemplate } from '../formula';
 import { newSpell } from '../store.svelte';
 import { AB_NAMES, ACTION_LABELS, ARMOR, SKILLS } from '../data/srd';
@@ -151,6 +169,70 @@ class Writer {
 			this.text(line, x, this.y + 2, size, font, color);
 		}
 	}
+	/** Wrapped text whose first words (a run-in title) are bold. */
+	paraLead(
+		lead: string,
+		rest: string,
+		x: number,
+		w: number,
+		size = 8,
+		color: RGB = INK,
+		lead_ = 1.3
+	) {
+		const words = [
+			...clean(lead)
+				.split(/\s+/)
+				.filter(Boolean)
+				.map((t) => ({ t, f: this.b })),
+			...clean(rest)
+				.split(/\s+/)
+				.filter(Boolean)
+				.map((t) => ({ t, f: this.f }))
+		];
+		const space = this.f.widthOfTextAtSize(' ', size);
+		let line: typeof words = [];
+		let lw = 0;
+		const flush = () => {
+			this.ensure(size * lead_);
+			this.y -= size * lead_;
+			let cx = x;
+			for (const wd of line) {
+				this.page.drawText(wd.t, { x: cx, y: this.y + 2, size, font: wd.f, color });
+				cx += wd.f.widthOfTextAtSize(wd.t, size) + space;
+			}
+			line = [];
+			lw = 0;
+		};
+		for (const wd of words) {
+			const ww = wd.f.widthOfTextAtSize(wd.t, size);
+			if (line.length && lw + space + ww > w) flush();
+			lw += (line.length ? space : 0) + ww;
+			line.push(wd);
+		}
+		if (line.length) flush();
+	}
+	/** Rules text: paragraphs split on new lines, bold "Title." run-ins, indented bullets. */
+	rules(text: string, x: number, w: number, size = 8, color: RGB = INK) {
+		for (const p of text.split('\n').filter((t) => t.trim())) {
+			if (p.startsWith('# ')) {
+				// A small heading inside the rule ("Cantrips", "Creating a Spellbook").
+				this.paraLead(p.slice(2), '', x, w, size, color);
+				this.y -= 1;
+				continue;
+			}
+			const bullet = p.startsWith('• ');
+			const body = bullet ? p.slice(2) : p;
+			const [runIn, rest] = splitRunIn(body);
+			const px = bullet ? x + 8 : x;
+			const pw = bullet ? w - 8 : w;
+			if (bullet) {
+				this.ensure(size * 1.3);
+				this.text('•', x + 1, this.y - size * 1.3 + 2, size, this.f, color);
+			}
+			this.paraLead(runIn, rest, px, pw, size, color);
+			this.y -= 1.5;
+		}
+	}
 	heading(s: string) {
 		this.ensure(30);
 		this.y -= 20;
@@ -214,7 +296,8 @@ class Writer {
 		this.fieldMap[name] = { path, kind, fields: [name] };
 		return name;
 	}
-	check(path: (string | number)[], checked: boolean, x: number, y: number, s = 8) {
+	/** A tick box; with a path it is read back into the character, with null it is for the table only. */
+	check(path: (string | number)[] | null, checked: boolean, x: number, y: number, s = 8) {
 		const name = this.fname();
 		const cb = this.form.createCheckBox(name);
 		cb.addToPage(this.page, {
@@ -227,7 +310,7 @@ class Writer {
 			backgroundColor: rgb(1, 1, 1)
 		});
 		if (checked) cb.check();
-		this.fieldMap[name] = { path, kind: 'bool', fields: [name] };
+		if (path) this.fieldMap[name] = { path, kind: 'bool', fields: [name] };
 	}
 	/** A row of checkboxes whose checked count is a number in the character. */
 	counter(
@@ -261,18 +344,13 @@ class Writer {
 	}
 }
 
+/** Option lists whose picks print as a list of names (their entries are spells, skills…). */
+const NAMES_ONLY = /^(spells|school|rituals|tools):|^(expertise|scholar|weapon-mastery|skills)$/;
+
 export async function buildPdf(input: Character, packsUsed: ContentPack[]): Promise<Uint8Array> {
-	// Print the character's normal state: situational switches (raging, hasted…) off.
-	// The printed sheet uses the switches exactly as set in the app.
-	const kept = Object.fromEntries(
-		availableStates(input)
-			.filter((st) => input.active?.[st.id])
-			.map((st) => [st.id, true])
-	);
 	// A fresh sheet: everything tracked during play is left empty to fill in on paper.
 	const ch: Character = {
 		...input,
-		active: kept,
 		used: {},
 		hp: { current: 0, temp: 0 },
 		hitDiceUsed: 0,
@@ -291,6 +369,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 
 	const sc = scores(ch);
 	const c = makeCtx(ch, sc);
+	const lists = allOptions(ch);
 	const s0 = spellcasting(ch, sc);
 	const adv = advantages(ch);
 	const GOOD = rgb(0.13, 0.45, 0.25);
@@ -402,26 +481,12 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text(ac.parts.join(', '), colR, yr, 6.5, w.f, MUTED);
 		yr -= 9;
 	}
-	// On paper there are no switches: print the AC you get with each one (and without the ones kept on).
-	const acStates = availableStates(ch, sc).filter((st) => st.ac);
-	const altAc = acStates
-		.filter((st) => !kept[st.id])
-		.map(
-			(st) => `${st.name} ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`
-		);
-	const withoutAc = acStates
-		.filter((st) => kept[st.id])
-		.map((st) => {
-			const rest = { ...kept };
-			delete rest[st.id];
-			return `without ${st.name} ${armorClass({ ...ch, active: rest }, sc).value}`;
-		});
-	if (altAc.length || withoutAc.length) {
-		const parts = [
-			altAc.length ? `AC with: ${altAc.join(' · ')}` : '',
-			withoutAc.join(' · ')
-		].filter(Boolean);
-		for (const t of w.wrap(parts.join(' · '), rW, 6.5)) {
+	// Situational AC (Mage Armor, Shield of Faith…): print the AC you get with each one.
+	const altAc = availableStates(ch, sc)
+		.filter((st) => st.ac)
+		.map((st) => `${st.name} ${armorClass(ch, sc, [st.id]).value}`);
+	if (altAc.length) {
+		for (const t of w.wrap(`AC with: ${altAc.join(' · ')}`, rW, 6.5)) {
 			w.text(t, colR, yr, 6.5, w.f, MUTED);
 			yr -= 8.5;
 		}
@@ -473,7 +538,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	const profLines = [
 		`Armor: ${[(cls?.armor ?? []).join(', '), ch.prof.armor].filter(Boolean).join(', ') || 'none'}`,
 		`Weapons: ${[cls?.weapons, ch.prof.weapons].filter(Boolean).join(', ') || '-'}`,
-		`Tools: ${[cls?.tools, bg?.tool, ch.prof.tools].filter(Boolean).join(', ') || '-'}`,
+		`Tools: ${[...toolProficiencies(ch), ch.prof.tools].filter(Boolean).join(', ') || '-'}`,
 		`Languages: ${ch.prof.languages || '-'}`,
 		`Senses: ${[darkvision(ch) ? `Darkvision ${darkvision(ch)} ft` : '', ch.prof.senses].filter(Boolean).join(', ') || '-'}`
 	];
@@ -515,7 +580,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text(a.name || 'Attack', M, w.y, 10, w.b);
 		const hitX = M + 150;
 		w.text(hitText(a, r), hitX, w.y, r.dc !== null ? 8.5 : 10, w.b, ACCENT);
-		w.text(`${r.base} ${a.type}`, hitX + (r.dc !== null ? 80 : 62), w.y, 9.5);
+		w.text(`${r.total} ${r.types || a.type}`, hitX + (r.dc !== null ? 80 : 62), w.y, 9.5);
 		const extra = [
 			a.mastery && `Mastery: ${a.mastery}`,
 			a.range && `Range ${a.range}`,
@@ -526,20 +591,10 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			.join(' | ');
 		w.text(extra, M + 340, w.y, 7.5, w.f, MUTED);
 		w.y -= 3;
-		for (const x of r.riders) {
-			const t = `${x.on ? '[x]' : '[ ]'} ${x.r.name}: ${x.r.dmg ? '+' + x.r.dmg : ''}${x.r.hit ? ` ${signed(x.r.hit)} to hit` : ''} ${x.r.type}${x.r.when ? ` - ${x.r.when}` : ''}`;
+		for (const x of r.riders.filter((y) => !y.on)) {
+			const t = `+ ${x.r.name}: ${x.r.dmg ? '+' + x.r.dmg : ''}${x.r.hit ? ` ${signed(x.r.hit)} to hit` : ''} ${x.r.type}${x.r.when ? ` - ${x.r.when}` : ''}`;
 			w.para(t, M + 12, w.W - 12, 7.5, w.f, MUTED, 1.25);
 		}
-		if (r.riders.some((x) => x.on))
-			w.para(
-				`With ticked riders: ${r.total} (avg ${r.avg.toFixed(1)}), crit ${r.crit}`,
-				M + 12,
-				w.W - 12,
-				8,
-				w.b,
-				INK,
-				1.3
-			);
 		if (a.notes) w.para(a.notes, M + 12, w.W - 12, 7.5, w.i, INK, 1.25);
 		w.y -= 3;
 		w.page.drawLine({
@@ -609,7 +664,6 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		}
 	}
 	// Situational effects: tick them on paper when they apply.
-	const sctx = stateCtx(ch, sc);
 	const sits = availableStates(ch, sc);
 	if (sits.length) {
 		w.ensure(30);
@@ -617,24 +671,10 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text('SITUATIONAL', M, w.y, 9, w.b, ACCENT);
 		w.text('Tick while it applies', M + 70, w.y, 7, w.i, MUTED);
 		for (const st of sits) {
-			const fx: string[] = [];
-			if (st.ac?.bonus) fx.push(`+${st.ac.bonus} AC`);
-			if (st.ac?.min) fx.push(`AC at least ${st.ac.min}`);
-			if (st.ac?.ignoreArmor)
-				fx.push(`AC ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`);
-			if (st.ac?.base)
-				fx.push(`AC ${armorClass({ ...ch, active: { ...kept, [st.id]: true } }, sc).value}`);
-			if (kept[st.id]) fx.push('on in this sheet');
-			if (st.speed) fx.push(`+${st.speed} ft Speed`);
-			if (st.spellDc) fx.push(`spell DC ${s0.dc + st.spellDc}`);
-			for (const r of st.riders?.(sctx) ?? [])
-				fx.push(
-					`${r.name}: ${r.dmg ? `+${r.dmg}${r.type ? ' ' + r.type : ''}` : ''}${r.hit ? ` ${signed(r.hit)} to hit` : ''} (${r.applies === 'weapon' ? 'weapon attacks' : r.applies === 'all' ? 'all attacks' : `${r.applies} attacks`}${r.with?.length ? ', with ' + r.with.join(' + ') : ''})`
-				);
-			const text = [fx.join('; '), st.notes?.(sctx)].filter(Boolean).join('. ');
+			const text = stateSummary(ch, st, sc);
 			w.ensure(16);
 			w.y -= 11;
-			w.check(['active', st.id], !!kept[st.id], M + 6, w.y - 1, 7);
+			w.check(null, false, M + 6, w.y - 1, 7);
 			w.text(st.name, M + 17, w.y, 8.5, w.b);
 			if (text) w.para(text, M + 17, w.W - 17, 7.5, w.f, INK, 1.25);
 		}
@@ -648,19 +688,17 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 
 	// ---------------- Features ----------------
 	w.newPage();
-	w.heading('Features & feats by level');
+	w.heading('Features & feats');
 	const feats = features(ch).filter((f) => !f.hidden);
-	let lastL = 0;
-	for (const f of feats) {
-		if (f.l !== lastL) {
-			w.ensure(40);
-			w.y -= 14;
-			w.text(`LEVEL ${f.l}`, M, w.y, 9, w.b, ACCENT);
-			lastL = f.l;
-		}
-		w.ensure(24);
+	const pageRef = (t: RulesText | null) => (t?.page ? `p. ${t.page}` : '');
+	const shown = new Map<string, { level: number; recap: string }>();
+	const entry = (f: (typeof feats)[number]) => {
+		const full = f.edited ? null : rulesText(f.tkey ?? '');
+		w.ensure(30);
 		w.y -= 13;
-		const tags = [f.src, f.a !== 'passive' ? ACTION_LABELS[f.a] : ''].filter(Boolean).join(' | ');
+		const tags = [f.src, f.a !== 'passive' ? ACTION_LABELS[f.a] : '', pageRef(full)]
+			.filter(Boolean)
+			.join(' | ');
 		w.text(f.n, M + 8, w.y, 9.5, w.b);
 		let tx = M + 8 + w.width(f.n, 9.5, w.b) + 8;
 		w.text(tags, tx, w.y, 7, w.f, MUTED);
@@ -682,17 +720,108 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 				w.text(rl, x0 + width + 4, w.y, 7, w.f, MUTED);
 			}
 		}
-		if (f.d) w.para(f.d, M + 8, w.W - 8, 8.5, w.f, INK, 1.3);
-		if (f.choose) {
-			const list = allPackOptions()[f.choose.list];
-			for (const k of ch.choices[f.key] ?? []) {
-				const it = list?.items[k];
-				if (it)
-					w.para(`- ${it.name}: ${fillTemplate(it.d, c)}`, M + 16, w.W - 16, 8, w.f, INK, 1.3);
+		w.y -= 1;
+		// The short recap (with numbers for your level), then the full wording. A recap that
+		// only repeats the full wording is left out, and a feature that comes back at a later
+		// level (Ability Score Improvement, Expertise…) points to where its text was printed.
+		const before = full ? shown.get(f.tkey ?? '') : undefined;
+		if (full && f.d && !recapAddsNothing(f.d, full.full) && before?.recap !== f.d) {
+			w.para(f.d, M + 8, w.W - 8, 8, w.i, ACCENT, 1.3);
+			w.y -= 2;
+		}
+		if (full && before) {
+			w.para(`Full text: see level ${before.level}.`, M + 8, w.W - 8, 7.5, w.i, MUTED, 1.3);
+		} else if (full) {
+			w.rules(full.full, M + 8, w.W - 8, 8);
+			shown.set(f.tkey ?? '', { level: f.l, recap: f.d });
+		} else if (f.d) w.rules(f.d, M + 8, w.W - 8, 8.5);
+		for (const cd of f.choose ?? []) {
+			const list = optionList(lists, cd.list);
+			const items = (ch.choices[cd.key] ?? [])
+				.slice(0, cd.count)
+				.map((k) => list?.items[k])
+				.filter((it) => !!it);
+			if (!items.length) continue;
+			// Spells, skills, tools and weapons: just the names. Other options: their full text.
+			if (NAMES_ONLY.test(cd.list)) {
+				const where = /^(spells|school|rituals):/.test(cd.list) ? ' (see Spellcasting)' : '';
+				w.y -= 1;
+				w.paraLead(
+					`${cd.label ?? list?.label ?? 'Chosen'}:`,
+					items.map((it) => it.name).join(', ') + where,
+					M + 16,
+					w.W - 16,
+					8,
+					INK,
+					1.3
+				);
+				continue;
+			}
+			for (const it of items) {
+				const ot = rulesText(rulesKey('option', it.name));
+				const body = ot ? `${ot.full}${ot.page ? ` (p. ${ot.page})` : ''}` : fillTemplate(it.d, c);
+				w.y -= 1;
+				w.rules(`${it.name}. ${body}`, M + 16, w.W - 16, 8);
 			}
 		}
 		if (f.notes) w.para(`Note: ${f.notes}`, M + 8, w.W - 8, 8, w.i, ACCENT, 1.3);
-		w.y -= 3;
+		w.y -= 4;
+	};
+	const sub2 = (t: string) => {
+		w.ensure(40);
+		w.y -= 14;
+		w.text(t, M, w.y, 9, w.b, ACCENT);
+	};
+
+	// Origin: species and background first, then the class by level.
+	if (sp || bg) sub2('ORIGIN');
+	if (sp) {
+		w.ensure(30);
+		w.y -= 14;
+		const spBits = [
+			sp.size,
+			`Speed ${speed(ch)} ft`,
+			darkvision(ch) && !feats.some((x) => x.src === 'Species' && /darkvision/i.test(x.n))
+				? `Darkvision ${darkvision(ch)} ft`
+				: ''
+		].filter(Boolean);
+		w.text(`Species: ${[sp.name, lineage].filter(Boolean).join(' - ')}`, M + 8, w.y, 10, w.b);
+		w.text(
+			spBits.join(' | '),
+			M + 16 + w.width(`Species: ${[sp.name, lineage].filter(Boolean).join(' - ')}`, 10, w.b),
+			w.y,
+			7.5,
+			w.f,
+			MUTED
+		);
+		w.y -= 2;
+		for (const f of feats.filter((x) => originOf(x) === 'Species')) entry(f);
+	}
+	if (bg) {
+		w.ensure(40);
+		w.y -= 14;
+		w.text(`Background: ${bg.name}`, M + 8, w.y, 10, w.b);
+		w.y -= 2;
+		const asi = ABILITIES.filter((ab) => ch.bgAsi[ab])
+			.map((ab) => `+${ch.bgAsi[ab]} ${AB_NAMES[ab]}`)
+			.join(', ');
+		const rows: [string, string][] = [
+			['Ability scores', asi || `choose from ${bg.abilities.map((ab) => AB_NAMES[ab]).join(', ')}`],
+			['Skill proficiencies', bg.skills.map((k) => SKILLS[k]?.name ?? k).join(', ')],
+			['Tool proficiency', backgroundTool(ch)]
+		];
+		for (const [k, v] of rows) if (v) w.paraLead(`${k}:`, v, M + 8, w.W - 8, 8);
+		w.y -= 2;
+		for (const f of feats.filter((x) => originOf(x) === 'Background')) entry(f);
+	}
+
+	let lastL = 0;
+	for (const f of feats.filter((x) => !originOf(x))) {
+		if (f.l !== lastL) {
+			sub2(`LEVEL ${f.l}`);
+			lastL = f.l;
+		}
+		entry(f);
 	}
 
 	// ---------------- Spells ----------------
@@ -714,6 +843,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 				ritual: !!d?.ritual,
 				comp: d?.comp ?? '',
 				cost: d?.cost ?? 0,
+				material: d?.material ?? '',
 				consumed: !!d?.consumed,
 				desc: d?.d ?? '',
 				notes: `${d?.level === 0 ? 'Cantrip, known' : SPELL_KIND_LABEL[g.kind]} (${g.source})`
@@ -762,15 +892,14 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			(a, b) => a.level - b.level || a.name.localeCompare(b.name)
 		);
 		for (const spl of list) {
-			const notes = w.wrap(spl.notes, w.W - 440, 7.5);
-			w.ensure(12 + (notes.length - 1) * 9);
+			const full = rulesText(rulesKey('spell', spl.name));
+			// The material is printed under the spell, keep the column short.
+			const comp = spl.comp.replace(/\s*\(.*\)\s*$/, '');
+			const noteText = [spl.notes, pageRef(full)].filter(Boolean).join(' - ');
+			const notes = w.wrap(noteText, w.W - 440, 7.5);
+			// Keep the row and the start of its text on the same page.
+			w.ensure(36 + (notes.length - 1) * 9);
 			w.y -= 12;
-			w.page.drawLine({
-				start: { x: M, y: w.y - 3 - (notes.length - 1) * 9 },
-				end: { x: M + w.W, y: w.y - 3 - (notes.length - 1) * 9 },
-				thickness: 0.3,
-				color: RULE
-			});
 			w.text(spl.level === 0 ? 'C' : String(spl.level), M, w.y, 8, w.b);
 			w.text(
 				(spl.always ? '* ' : spl.prepared || spl.level === 0 ? '' : '( ) ') + spl.name,
@@ -781,22 +910,33 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			);
 			w.text(spl.time, M + 170, w.y, 7.5);
 			w.text(spl.range, M + 238, w.y, 7.5);
-			w.text(spl.duration, M + 296, w.y, 7.5);
+			// The C column already says Concentration.
+			w.text(spl.duration.replace(/^Concentration,\s*up to\s*/i, ''), M + 296, w.y, 7.5);
 			w.text([spl.conc ? 'C' : '', spl.ritual ? 'R' : ''].join(' '), M + 372, w.y, 7.5, w.b);
 			w.text(
-				spl.cost ? `${spl.comp} ${spl.cost}gp${spl.consumed ? '*' : ''}` : spl.comp,
+				spl.cost ? `${comp} ${spl.cost}gp${spl.consumed ? '*' : ''}` : comp,
 				M + 398,
 				w.y,
 				7.5,
 				spl.cost ? w.b : w.f
 			);
-			notes.forEach((t, k) => w.text(t, M + 440, w.y - k * 9, 7.5));
-			w.y -= (notes.length - 1) * 9;
-			if (spl.desc) {
-				w.y += 3;
-				w.para(spl.desc, M + 24, 400, 7, w.f, MUTED, 1.25);
-				w.y -= 2;
+			notes.forEach((t, k) => w.text(t, M + 440, w.y - k * 9, 7.5, w.f, MUTED));
+			w.y -= (notes.length - 1) * 9 + 1;
+			if (full && spl.desc) {
+				w.para(spl.desc, M + 24, w.W - 24, 7.5, w.i, ACCENT, 1.3);
+				w.y -= 1.5;
 			}
+			const body = full?.full ?? spl.desc;
+			if (body) w.rules(body, M + 24, w.W - 24, 7.5);
+			if (spl.material) w.paraLead('Material:', spl.material, M + 24, w.W - 24, 7.5, MUTED);
+			w.y -= 3;
+			w.page.drawLine({
+				start: { x: M, y: w.y },
+				end: { x: M + w.W, y: w.y },
+				thickness: 0.3,
+				color: RULE
+			});
+			w.y -= 2;
 		}
 		w.y -= 6;
 		w.para(
@@ -878,33 +1018,7 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			});
 		}
 	}
-	if (bg?.equipment) {
-		w.y -= 10;
-		w.para(`Background starting equipment: ${bg.equipment}`, M, w.W, 7.5, w.i, MUTED);
-	}
 
-	// ---------------- Notes ----------------
-	w.newPage();
-	w.heading('Character & notes');
-	const notes: [keyof Character['notes'], string, number][] = [
-		['appearance', 'Appearance', 60],
-		['personality', 'Personality traits', 50],
-		['ideals', 'Ideals', 36],
-		['bonds', 'Bonds', 36],
-		['flaws', 'Flaws', 36],
-		['allies', 'Allies & organizations', 50],
-		['backstory', 'Backstory', 150],
-		['other', 'Other notes', 110]
-	];
-	for (const [k, label, minH] of notes) {
-		const lines = w.wrap(ch.notes[k], w.W - 8, 8.5).length;
-		const h = Math.max(minH, lines * 11 + 8);
-		w.ensure(h + 16);
-		w.y -= 12;
-		w.label(label, M, w.y);
-		w.y -= h + 3;
-		w.field(['notes', k], 'text', ch.notes[k], M, w.y, w.W, h, { multiline: true, size: 8.5 });
-	}
 	w.y -= 18;
 	w.ensure(20);
 	w.para(

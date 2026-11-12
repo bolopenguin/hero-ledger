@@ -1,9 +1,33 @@
 // Built-in option lists for class choices (D&D 2024 rules, SRD 5.2). Some lists are generated
 // for the character: weapon masteries, skills for Expertise, and spells of a class and level.
 import type { OptionItem, OptionList, SpellDef } from '../types';
+import { GEAR, type GearCat } from './equipment';
 import { SKILLS, WEAPONS } from './srd';
 
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+const DAMAGE = (types: string[]) =>
+	Object.fromEntries(types.map((t): [string, OptionItem] => [t.toLowerCase(), { name: t, d: '' }]));
+
 export const STATIC_OPTIONS: Record<string, OptionList> = {
+	'damage-adept': {
+		label: 'Damage type',
+		items: DAMAGE(['Acid', 'Cold', 'Fire', 'Lightning', 'Thunder'])
+	},
+	'damage-types': {
+		label: 'Damage types',
+		items: DAMAGE([
+			'Acid',
+			'Cold',
+			'Fire',
+			'Lightning',
+			'Necrotic',
+			'Poison',
+			'Psychic',
+			'Radiant',
+			'Thunder'
+		])
+	},
 	'land-type': {
 		label: 'Land',
 		items: {
@@ -184,6 +208,13 @@ export function dynamicOptions(classId: string, spells: SpellDef[]): Record<stri
 				])
 		)
 	};
+	const profItems = (ids: string[]) =>
+		Object.fromEntries(
+			ids.map((id): [string, OptionItem] => [
+				id,
+				{ name: SKILLS[id].name, d: 'Proficiency.', effects: { skill: id } }
+			])
+		);
 	const skillItems = (ids: string[]) =>
 		Object.fromEntries(
 			ids.map((id): [string, OptionItem] => [
@@ -196,20 +227,87 @@ export function dynamicOptions(classId: string, spells: SpellDef[]): Record<stri
 			])
 		);
 	out['expertise'] = { label: 'Expertise', items: skillItems(Object.keys(SKILLS)) };
+	out['skills'] = { label: 'Skill proficiency', items: profItems(Object.keys(SKILLS)) };
+	out['weapon-mastery-any'] = {
+		label: 'Weapon Mastery',
+		items: Object.fromEntries(
+			Object.entries(WEAPONS)
+				.filter(([k, w]) => k !== 'unarmed' && w.mastery)
+				.map(([k, w]): [string, OptionItem] => [
+					k,
+					{ name: w.name, d: `${w.mastery}.`, effects: { mastery: k } }
+				])
+		)
+	};
+	const tools = (cats: GearCat[]) =>
+		Object.fromEntries(
+			GEAR.filter((g) => cats.includes(g.cat)).map((g): [string, OptionItem] => [
+				slug(g.name),
+				{ name: g.name, d: g.d ?? '', effects: { tool: g.name } }
+			])
+		);
+	out['tools:artisan'] = { label: "Artisan's Tools", items: tools(['artisan']) };
+	out['tools:instrument'] = { label: 'Musical Instruments', items: tools(['instrument']) };
+	out['tools:gaming'] = { label: 'Gaming Sets', items: tools(['gaming']) };
+	out['tools:any'] = {
+		label: 'Tools',
+		items: tools(['artisan', 'tool', 'instrument', 'gaming'])
+	};
 	out['scholar'] = {
 		label: 'Scholar',
 		items: skillItems(['arcana', 'history', 'investigation', 'medicine', 'nature', 'religion'])
 	};
-	// spells:<class>:<level>, used by Mystic Arcanum, Spell Mastery, Signature Spells
-	for (const sp of spells)
-		for (const cls of sp.classes) {
-			const key = `spells:${cls.toLowerCase()}:${sp.level}`;
-			out[key] ??= { label: `${cls} spells, level ${sp.level}`, items: {} };
-			out[key].items[sp.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')] = {
-				name: sp.name,
-				d: sp.d,
-				spells: [sp.name]
-			};
-		}
+	// spells:<class>:<level> (Mystic Arcanum, cantrips from feats…), school:<school>:<level>
+	// (Fey-Touched…) and rituals:<level> (Ritual Caster).
+	const addSpell = (key: string, label: string, sp: SpellDef) => {
+		out[key] ??= { label, items: {} };
+		out[key].items[slug(sp.name)] = { name: sp.name, d: sp.d, spells: [sp.name] };
+	};
+	const lvl = (l: number) => (l === 0 ? 'cantrips' : `spells, level ${l}`);
+	for (const sp of spells) {
+		for (const cls of sp.classes)
+			addSpell(`spells:${cls.toLowerCase()}:${sp.level}`, `${cls} ${lvl(sp.level)}`, sp);
+		if (sp.school)
+			addSpell(
+				`school:${sp.school.toLowerCase()}:${sp.level}`,
+				`${sp.school} ${lvl(sp.level)}`,
+				sp
+			);
+		if (sp.ritual) addSpell(`rituals:${sp.level}`, `Ritual spells, level ${sp.level}`, sp);
+	}
 	return out;
+}
+
+/**
+ * Lists named by their parameters: "toolset:disguise-kit,forgery-kit" (one of these tools),
+ * "skills:insight,perception" (proficiency in one of them) and
+ * "skillup:arcana,history" (proficiency, or Expertise if you already have it).
+ */
+export function paramOptions(key: string): OptionList | undefined {
+	const tm = key.match(/^toolset:([a-z0-9,-]+)$/);
+	if (tm) {
+		const want = new Set(tm[1].split(','));
+		const items = GEAR.filter((g) => want.has(slug(g.name))).map((g): [string, OptionItem] => [
+			slug(g.name),
+			{ name: g.name, d: g.d ?? '', effects: { tool: g.name } }
+		]);
+		return items.length ? { label: 'Tools', items: Object.fromEntries(items) } : undefined;
+	}
+	const m = key.match(/^(skills|skillup):([a-z,]+)$/);
+	if (!m) return undefined;
+	const ids = m[2].split(',').filter((id) => SKILLS[id]);
+	const up = m[1] === 'skillup';
+	return {
+		label: up ? 'Skill (proficiency, or Expertise if proficient)' : 'Skill proficiency',
+		items: Object.fromEntries(
+			ids.map((id): [string, OptionItem] => [
+				id,
+				{
+					name: SKILLS[id].name,
+					d: up ? 'Proficiency, or Expertise if you are already proficient.' : 'Proficiency.',
+					effects: up ? { skillUp: id } : { skill: id }
+				}
+			])
+		)
+	};
 }

@@ -16,11 +16,13 @@
 		scores,
 		signed,
 		skills,
-		speed
+		speed,
+		startingChoices,
+		toolProficiencies
 	} from '$lib/calc';
 	import { CLASSES } from '$lib/data/classes';
-	import { AB_NAMES, ALIGNMENTS, BACKGROUNDS, SKILLS, SPECIES } from '$lib/data/srd';
-	import { allPackBackgrounds, allPackSpecies, packSubclasses } from '$lib/packs.svelte';
+	import { AB_NAMES, ALIGNMENTS, ARMOR, BACKGROUNDS, SKILLS, SPECIES } from '$lib/data/srd';
+	import { allPackSpecies, packs, packSubclasses } from '$lib/packs.svelte';
 	import { ABILITIES, type Ab } from '$lib/types';
 	import Stat from './Stat.svelte';
 	import {
@@ -33,7 +35,6 @@
 		describe
 	} from '$lib/advantage';
 	import { uid } from '$lib/store.svelte';
-	import RightNow from './RightNow.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -47,7 +48,6 @@
 	const maxHp = $derived(hpMax(ch, sc));
 	const packSubs = $derived(packSubclasses(ch.classId));
 	const pSpecies = $derived(allPackSpecies());
-	const pBgs = $derived(allPackBackgrounds());
 	const pp = $derived(10 + (sk.perception?.value ?? 0) + (ch.bonus.pp ?? 0));
 	// Advantage and disadvantage, shown next to each roll and listed under the skills.
 	const adv = $derived(advantages(ch));
@@ -68,7 +68,7 @@
 	// always at least proficient, so for them the click toggles expertise on and off.
 	function cycleSkill(id: string) {
 		const eff = sk[id].prof;
-		if (sk[id].fromBg) ch.skills[id] = eff === 2 ? 0 : 2;
+		if (sk[id].fromBg || sk[id].fromFeature) ch.skills[id] = eff === 2 ? 0 : 2;
 		else ch.skills[id] = (eff + 1) % 3;
 	}
 	function setBgAsi(mode: string) {
@@ -77,6 +77,14 @@
 		else ch.bgAsi = {};
 	}
 	const bgPoints = $derived(Object.values(ch.bgAsi).reduce((a, b) => a + (b ?? 0), 0));
+	const bgAsiProblem = $derived.by(() => {
+		if (!bg || !bgPoints) return '';
+		const vals = Object.entries(ch.bgAsi).filter(([, v]) => v);
+		if (vals.some(([, v]) => (v ?? 0) > 2)) return 'no score above +2';
+		if (bg.freeAsi && !vals.some(([ab]) => bg.abilities.includes(ab as Ab)))
+			return `put at least +1 on ${bg.abilities.map((a) => a.toUpperCase()).join(', ')}`;
+		return '';
+	});
 
 	// Skill proficiencies the player picks by hand (background skills come automatically).
 	const classSkillList = $derived(
@@ -89,23 +97,17 @@
 				`${cls.name}${cls.skills.list === 'any' ? ', any skills' : ', from the underlined skills'}`,
 				cls.skills.n
 			]);
-		if (ch.speciesId === 'human') out.push(['Skillful (Human), any skill', 1]);
-		if (ch.speciesId === 'elf') out.push(['Keen Senses (Elf): Insight, Perception or Survival', 1]);
-		const skilled = activeFeats(ch).filter(
-			(f) => f.key === 'skilled' || f.key.endsWith(':skilled')
-		).length;
-		if (skilled)
-			out.push([
-				`Skilled feat: 3 skills or tools${skilled > 1 ? ` ×${skilled}` : ''}`,
-				3 * skilled
-			]);
+		if (activeFeats(ch).some((f) => f.key === 'skill-expert' || f.key.endsWith(':skill-expert')))
+			out.push(['Skill Expert feat: 1 skill', 1]);
 		if (ch.classId === 'bard' && ch.subclassId === 'srd' && ch.level >= 3)
 			out.push(['Bonus Proficiencies (Lore): 3 skills', 3]);
 		return out;
 	});
 	const skillsExpected = $derived(skillSources.reduce((t, [, n]) => t + n, 0));
 	const skillsPicked = $derived(
-		Object.keys(SKILLS).filter((id) => (ch.skills[id] ?? 0) >= 1 && !sk[id].fromBg).length
+		Object.keys(SKILLS).filter(
+			(id) => (ch.skills[id] ?? 0) >= 1 && !sk[id].fromBg && !sk[id].fromFeature
+		).length
 	);
 
 	// Ability scores: recognise the standard array and point buy, and offer a class-based array.
@@ -239,9 +241,22 @@
 					bind:value={ch.backgroundId}
 					onchange={() => (ch.bgAsi = {})}
 				>
-					{#each Object.entries(BACKGROUNDS) as [k, v] (k)}<option value={k}>{v.name}</option
-						>{/each}
-					{#each Object.entries(pBgs) as [k, v] (k)}<option value={k}>{v.name}</option>{/each}
+					{#if packs.list.some((p) => Object.keys(p.backgrounds ?? {}).length)}
+						<optgroup label="Built in">
+							{#each Object.entries(BACKGROUNDS) as [k, v] (k)}<option value={k}>{v.name}</option
+								>{/each}
+						</optgroup>
+						{#each packs.list.filter((p) => Object.keys(p.backgrounds ?? {}).length) as p (p.id)}
+							<optgroup label={p.name}>
+								{#each Object.entries(p.backgrounds ?? {}) as [k, v] (k)}<option
+										value="pack:{p.id}:{k}">{v.name}</option
+									>{/each}
+							</optgroup>
+						{/each}
+					{:else}
+						{#each Object.entries(BACKGROUNDS) as [k, v] (k)}<option value={k}>{v.name}</option
+							>{/each}
+					{/if}
 					<option value="custom">Custom background…</option>
 				</select>
 			</label>
@@ -291,7 +306,7 @@
 						>
 					</label>
 					<p class="col-span-2 text-xs text-base-content/60 lg:col-span-4">
-						Tick saving throw proficiencies below and add features in the Features tab.
+						Tick saving throw proficiencies below and add features in the Class & features tab.
 					</p>
 				</div>
 			{/if}
@@ -333,10 +348,13 @@
 			{#if bg}
 				<div class="flex flex-wrap items-center gap-2 text-sm sm:col-span-2 lg:col-span-4">
 					<span class="label-xs">Background ability scores</span>
-					<span class="text-xs text-base-content/60"
-						>+2 and +1, or +1 to three of {bg.abilities.map((a) => a.toUpperCase()).join(', ')} ({bgPoints}/3)</span
+					<span class="text-xs {bgAsiProblem ? 'text-warning' : 'text-base-content/60'}"
+						>{bg.freeAsi
+							? `+2 and +1, or +1/+1/+1: at least +1 to ${bg.abilities.map((a) => a.toUpperCase()).join(', ')} (one of them), the rest to any score`
+							: `+2 and +1, or +1 to three of ${bg.abilities.map((a) => a.toUpperCase()).join(', ')}`}
+						({bgPoints}/3){bgAsiProblem ? ` · ${bgAsiProblem}` : ''}</span
 					>
-					{#each bg.abilities as ab (ab)}
+					{#each bg.freeAsi ? ABILITIES : bg.abilities as ab (ab)}
 						<label class="flex items-center gap-1">
 							<span class="text-xs uppercase">{ab}</span>
 							<select
@@ -437,8 +455,8 @@
 							: v.prof === 1
 								? 'border-primary bg-primary'
 								: 'border-base-content/40'}"
-						title={v.fromBg
-							? 'Proficient from background. Click to toggle Expertise (PB added twice).'
+						title={v.fromBg || v.fromFeature
+							? `Proficient from ${v.fromBg ? 'background' : v.fromFeature}. Click to toggle Expertise (PB added twice).`
 							: 'Click: none → proficient → Expertise (PB added twice)'}
 						aria-label="{s.name} proficiency"
 						onclick={() => cycleSkill(id)}
@@ -458,9 +476,13 @@
 					<span class="text-[0.65rem] text-base-content/45 uppercase">{s.ab}</span>
 					{#if v.fromBg}<span class="text-[0.65rem] text-secondary" title="From background">BG</span
 						>{/if}
+					{#if v.fromFeature}<span
+							class="text-[0.65rem] text-info"
+							title="Chosen in {v.fromFeature} (Class & features tab)">FEAT</span
+						>{/if}
 					{#if v.fromChoice}<span
 							class="text-[0.65rem] text-accent"
-							title="Expertise chosen in the Class tab">CLASS</span
+							title="Expertise chosen in a feature or feat">CHOSEN</span
 						>{/if}
 					{#if v.extra.length}<span class="text-[0.65rem] text-accent" title={v.extra.join(', ')}
 							>+</span
@@ -498,7 +520,7 @@
 			>
 			<span class="text-base-content/55"
 				>· {skillSources.map(([t, n]) => `${t} (${n})`).join(' · ')}{bg
-					? ` · background skills are added for you`
+					? ` · background skills, and skills chosen in species traits and feats (Class & features tab), are added for you`
 					: ''}</span
 			>
 		</p>
@@ -515,9 +537,7 @@
 							>
 							<span
 								><b>{advLabel(e.target)}</b>{e.cond ? ` ${e.cond}` : ''}
-								<span class="text-xs text-base-content/55"
-									>· {e.source}{e.on ? ' (on now)' : ''}</span
-								></span
+								<span class="text-xs text-base-content/55">· {e.source}</span></span
 							>
 							{#if e.source === 'Your note'}
 								<button
@@ -592,7 +612,28 @@
 					<span class="text-lg">{sp?.size ?? '—'}</span>
 				</div>
 			</div>
-			<div class="mt-3 border-t border-base-300 pt-2"><RightNow compact /></div>
+			<div
+				class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-base-300 pt-2 text-sm"
+			>
+				<label class="flex items-center gap-2"
+					><span class="label-xs">Armor</span>
+					<select class="select w-44 select-xs" bind:value={ch.gear.armor}>
+						<option value="">None</option>
+						{#each ['light', 'medium', 'heavy'] as t (t)}
+							<optgroup label="{t[0].toUpperCase()}{t.slice(1)} armor">
+								{#each Object.entries(ARMOR).filter(([, a]) => a.type === t) as [k, a] (k)}<option
+										value={k}>{a.name}</option
+									>{/each}
+							</optgroup>
+						{/each}
+					</select></label
+				>
+				<label class="flex items-center gap-2"
+					><input type="checkbox" class="checkbox checkbox-xs" bind:checked={ch.gear.shield} /> Shield
+					(+2 AC)</label
+				>
+				<span class="text-xs text-base-content/55">{ac.parts.join(' · ')}</span>
+			</div>
 			{#if darkvision(ch) || ac.stealthDis}
 				<p class="mt-2 text-xs text-base-content/65">
 					{#if darkvision(ch)}Darkvision {darkvision(ch)} ft.{/if}
@@ -638,9 +679,12 @@
 				</dd>
 				<dt class="label-xs pt-1">Tools</dt>
 				<dd>
-					<span class="text-base-content/70"
-						>{[cls?.tools, bg?.tool].filter(Boolean).join(', ') || '—'}</span
-					>
+					<span class="text-base-content/70">{toolProficiencies(ch).join(', ') || '—'}</span>
+					{#if startingChoices(ch).some((cd) => (ch.choices[cd.key]?.length ?? 0) < cd.count)}
+						<a href="#features" class="link text-xs text-warning"
+							>Skills and tools still to choose: Class & features tab</a
+						>
+					{/if}
 					<input class="line-input" placeholder="other tools" bind:value={ch.prof.tools} />
 				</dd>
 				<dt class="label-xs pt-1">Languages</dt>

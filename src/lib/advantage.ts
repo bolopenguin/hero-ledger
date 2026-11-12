@@ -13,8 +13,6 @@ export interface AdvEntry {
 	/** Only in some situations ("vs Charmed", "while raging"). */
 	cond?: string;
 	source: string;
-	/** For switches: whether the switch is on right now. */
-	on?: boolean;
 }
 
 export interface CustomAdv {
@@ -137,7 +135,7 @@ const RULES: Rule[] = [
 	}
 ];
 
-/** Switches that give advantage while they are on. */
+/** Situational effects that give advantage while they last. */
 const STATE_ADV: Record<string, { targets: string[]; cond: string }> = {
 	rage: { targets: ['check:str', 'save:str'], cond: 'while raging' },
 	enlarge: { targets: ['check:str', 'save:str'], cond: 'while enlarged' },
@@ -162,11 +160,10 @@ export function advantages(ch: Character): AdvEntry[] {
 					target: t,
 					mode: 'adv',
 					cond: a.cond,
-					source: st.name,
-					on: !!ch.active?.[st.id]
+					source: st.name
 				});
 	}
-	// Armor that hinders Stealth (unless the Unarmored switch says it's off).
+	// Armor that hinders Stealth .
 	const armor = ARMOR[ch.gear.armor];
 	if (armor && armorClass(ch, sc).stealthDis)
 		out.push({ target: 'stealth', mode: 'dis', source: armor.name });
@@ -190,7 +187,7 @@ export function advMarker(
 	list: AdvEntry[]
 ): { text: string; mode: AdvMode | 'both'; always: boolean } | null {
 	if (!list.length) return null;
-	const always = list.filter((e) => !e.cond || e.on);
+	const always = list.filter((e) => !e.cond);
 	const pick = always.length ? always : list;
 	const adv = pick.some((e) => e.mode === 'adv');
 	const dis = pick.some((e) => e.mode === 'dis');
@@ -232,4 +229,4 @@ export const ADV_TARGETS: string[] = [
 ];
 
 export const describe = (e: AdvEntry) =>
-	`${e.mode === 'adv' ? 'Advantage' : 'Disadvantage'}${e.cond ? ` ${e.cond}` : ''} (${e.source}${e.on ? ', on now' : ''})`;
+	`${e.mode === 'adv' ? 'Advantage' : 'Disadvantage'}${e.cond ? ` ${e.cond}` : ''} (${e.source})`;

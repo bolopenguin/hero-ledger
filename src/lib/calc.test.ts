@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib';
+import { PDFDocument, PDFCheckBox } from 'pdf-lib';
 import {
 	allOptions,
 	availableStates,
@@ -19,9 +19,21 @@ import {
 	scores,
 	skills,
 	speed,
+	startingChoices,
+	startingToolChoices,
+	backgroundTool,
+	stateSummary,
+	toolProficiencies,
 	spellcasting
 } from './calc';
-import { installPack, removePack } from './packs.svelte';
+import {
+	installPack,
+	recapAddsNothing,
+	removePack,
+	rulesKey,
+	rulesText,
+	runIn
+} from './packs.svelte';
 import { avgDice, evalFormula, fillTemplate, formatDice, parseDice } from './formula';
 import { blankCharacter, newAttack, newSpell, sampleCharacter } from './store.svelte';
 import { buildPdf } from './pdf/export';
@@ -30,7 +42,6 @@ import { CLASSES } from './data/classes';
 import { attacksPerAction, classStats } from './classStats';
 import { turnSummary } from './turn';
 import { advantages, advForSave, advForSkill, advMarker } from './advantage';
-import { CLASS_STARTING, GEAR_BY_NAME, parseBackgroundEquipment } from './data/equipment';
 
 describe('formulas and dice', () => {
 	const c = { l: 5, pb: 3, m: (ab: string) => (ab === 'wis' ? 2 : 0) } as Parameters<
@@ -82,10 +93,11 @@ describe('sample fighter (level 5 Champion, dwarf)', () => {
 		expect(ls.base).toBe('1d8 + 4');
 		expect(ls.critOn).toBe(19);
 		ch.attacks[0].twoHanded = true;
-		ch.attacks[0].riders[ch.riders[0].id] = true;
 		const two = attack(ch, ch.attacks[0], sc);
-		expect(two.total).toBe('1d10 + 2d6 + 4');
-		expect(two.crit).toBe('2d10 + 4d6 + 4');
+		// Riders that apply only sometimes are listed with the attack, not added in.
+		expect(two.total).toBe('1d10 + 4');
+		expect(two.crit).toBe('2d10 + 4');
+		expect(two.riders.find((x) => x.r.id === ch.riders[0].id)?.on).toBe(false);
 	});
 	it('lists features by level with the chosen feats', () => {
 		const f = features(ch);
@@ -116,10 +128,9 @@ describe('every class builds at every level', () => {
 		const ch = blankCharacter();
 		ch.classId = 'rogue';
 		ch.level = 9;
-		ch.attacks = [
-			newAttack({ weapon: 'rapier', dice: '1d8', props: 'Finesse', riders: { 'auto:sneak': true } })
-		];
-		expect(attack(ch, ch.attacks[0]).total).toContain('5d6');
+		ch.attacks = [newAttack({ weapon: 'rapier', dice: '1d8', props: 'Finesse' })];
+		const sneak = attack(ch, ch.attacks[0]).riders.find((x) => x.r.id === 'auto:sneak');
+		expect(sneak?.r.dmg).toBe('5d6');
 	});
 });
 
@@ -133,7 +144,6 @@ describe('PDF round trip', () => {
 		const doc = await PDFDocument.load(bytes);
 		const form = doc.getForm();
 		const fields = form.getFields();
-		const text = fields.filter((f) => f instanceof PDFTextField) as PDFTextField[];
 		const ab = (u: Uint8Array) =>
 			u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 		const map = (await readEmbedded(ab(bytes)))!.fieldMap;
@@ -141,8 +151,8 @@ describe('PDF round trip', () => {
 		const hp = form.getTextField(hpName);
 		expect(hp.getText() ?? '').toBe(''); // printed empty, to fill in at the table
 		hp.setText('31');
-		const notes = text.find((f) => f.getText() === ch.notes.backstory)!;
-		notes.setText('Rewritten at the table.');
+		const gpName = Object.entries(map).find(([, e]) => e.path.join('.') === 'gear.coins.gp')![0];
+		form.getTextField(gpName).setText('123');
 		const boxes = fields.filter((f) => f instanceof PDFCheckBox) as PDFCheckBox[];
 		boxes.forEach((b) => b.uncheck());
 		const edited = await doc.save();
@@ -152,7 +162,7 @@ describe('PDF round trip', () => {
 		);
 		expect(r.character.name).toBe(ch.name);
 		expect(r.character.hp.current).toBe(31);
-		expect(r.character.notes.backstory).toBe('Rewritten at the table.');
+		expect(r.character.gear.coins.gp).toBe(123);
 		expect(r.character.attacks.length).toBe(3);
 		expect(r.changedFields).toBeGreaterThan(10);
 	});
@@ -230,7 +240,9 @@ describe('always-prepared spells, feat effects and option choices', () => {
 		w.classId = 'warlock';
 		w.level = 2;
 		const inv = features(w).find((f) => f.n === 'Eldritch Invocations')!;
-		expect(inv.choose).toEqual({ list: 'invocations', count: 3 });
+		expect(inv.choose).toEqual([
+			{ key: inv.key, list: 'invocations', count: 3, grant: undefined, label: undefined }
+		]);
 		w.choices[inv.key] = ['mask'];
 		expect(grantedSpells(w).map((g) => g.name)).toContain('Disguise Self');
 		removePack('test-pack');
@@ -265,7 +277,7 @@ describe('class choices with real effects', () => {
 		const ch = blankCharacter();
 		ch.classId = 'barbarian';
 		const wm = features(ch).find((f) => f.n === 'Weapon Mastery')!;
-		expect(wm.choose?.count).toBe(2);
+		expect(wm.choose?.[0].count).toBe(2);
 		const list = allOptions(ch)['weapon-mastery'].items;
 		expect(list.greataxe).toBeTruthy();
 		expect(list.longbow).toBeUndefined(); // Barbarians master melee weapons only
@@ -339,27 +351,10 @@ describe('class tab and equipment', () => {
 				expect(attacksPerAction(ch)).toBeGreaterThan(0);
 			}
 	});
-	it('parses background equipment and every class option uses known items', () => {
-		const o = parseBackgroundEquipment(
-			"2 Daggers, Thieves' Tools, Parchment (8 sheets), 20 Arrows, 16 GP — or 50 GP"
-		);
-		expect(o[0].items).toEqual([
-			['Dagger', 2],
-			["Thieves' Tools", 1],
-			['Parchment', 8],
-			['Arrows', 1]
-		]);
-		expect(o[0].gp).toBe(16);
-		expect(o[1].gp).toBe(50);
-		const unknown = Object.values(CLASS_STARTING)
-			.flatMap((opts) => opts.flatMap((op) => op.items.map(([n]) => n)))
-			.filter((n) => !GEAR_BY_NAME.has(n.toLowerCase()) && !/your|occult/i.test(n));
-		expect(unknown).toEqual([]);
-	});
 });
 
-describe('situational switches', () => {
-	it('Rage and Reckless drive riders; Unarmored and spells change AC', () => {
+describe('situational effects', () => {
+	it('are listed, not counted: riders under the attack, AC with each effect', () => {
 		const ch = blankCharacter();
 		ch.classId = 'barbarian';
 		ch.subclassId = 'srd';
@@ -372,25 +367,24 @@ describe('situational switches', () => {
 		const ids = availableStates(ch).map((s) => s.id);
 		expect(ids).toEqual(expect.arrayContaining(['rage', 'reckless', 'unarmored']));
 		expect(ids).not.toContain('hunters-mark');
-		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 3');
-		ch.active = { rage: true };
-		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 5');
-		ch.active = { rage: true, reckless: true };
-		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 2d6 + 5'); // Frenzy
-		ch.active = { reckless: true };
-		expect(attack(ch, ch.attacks[0]).total).toBe('1d12 + 3'); // Frenzy needs Rage too
+		const r = attack(ch, ch.attacks[0]);
+		expect(r.total).toBe('1d12 + 3');
+		expect(r.riders.filter((x) => !x.on).map((x) => x.r.name)).toEqual(
+			expect.arrayContaining(['Rage', 'Frenzy'])
+		);
 		expect(armorClass(ch).value).toBe(14); // Hide 12 + Dex 2
-		ch.active = { unarmored: true };
-		expect(armorClass(ch).value).toBe(15); // 10 + Dex 2 + Con 3
+		expect(armorClass(ch, scores(ch), ['unarmored']).value).toBe(15); // 10 + Dex 2 + Con 3
+		const rage = availableStates(ch).find((s) => s.id === 'rage')!;
+		expect(stateSummary(ch, rage)).toContain('+2');
 	});
 
 	it("Hunter's Mark, Mage Armor, Shield and Innate Sorcery", () => {
 		const r = blankCharacter();
 		r.classId = 'ranger';
 		r.attacks = [newAttack({ name: 'Longbow', weapon: 'longbow', kind: 'ranged', dice: '1d8' })];
-		expect(attack(r, r.attacks[0]).total).not.toContain('1d6');
-		r.active = { 'hunters-mark': true };
-		expect(attack(r, r.attacks[0]).total).toContain('1d6');
+		const res = attack(r, r.attacks[0]);
+		expect(res.total).not.toContain('1d6');
+		expect(res.riders.some((x) => x.r.dmg === '1d6' && !x.on)).toBe(true);
 
 		const w = blankCharacter();
 		w.classId = 'wizard';
@@ -399,16 +393,24 @@ describe('situational switches', () => {
 			newSpell({ name: 'Shield', level: 1 })
 		];
 		const base = armorClass(w).value;
-		w.active = { 'mage-armor': true };
-		expect(armorClass(w).value).toBe(base + 3);
-		w.active = { 'mage-armor': true, 'shield-spell': true };
-		expect(armorClass(w).value).toBe(base + 8);
+		expect(armorClass(w, scores(w), ['mage-armor']).value).toBe(base + 3);
+		expect(armorClass(w, scores(w), ['mage-armor', 'shield-spell']).value).toBe(base + 8);
 
 		const s = blankCharacter();
 		s.classId = 'sorcerer';
 		const dc = spellcasting(s).dc;
-		s.active = { 'innate-sorcery': true };
-		expect(spellcasting(s).dc).toBe(dc + 1);
+		const innate = availableStates(s).find((x) => x.id === 'innate-sorcery')!;
+		expect(stateSummary(s, innate)).toContain(`spell DC ${dc + 1}`);
+	});
+
+	it('a shield adds 2 to AC', () => {
+		const ch = blankCharacter();
+		ch.classId = 'fighter';
+		ch.gear.armor = 'chainmail';
+		const base = armorClass(ch).value;
+		ch.gear.shield = true;
+		expect(armorClass(ch).value).toBe(base + 2);
+		expect(armorClass(ch).parts).toContain('Shield +2');
 	});
 });
 
@@ -437,43 +439,193 @@ describe('your turn summary', () => {
 	});
 });
 
-describe('switches in the PDF', () => {
-	it('exports the switches as set in the app', async () => {
+describe('choices on features and feats', () => {
+	it('Druidic Warrior asks for two Druid cantrips', () => {
+		installPack({
+			id: 'cantrips',
+			name: 'Cantrips',
+			spells: [
+				{
+					name: 'Guidance',
+					level: 0,
+					school: 'Divination',
+					time: '',
+					range: '',
+					comp: '',
+					duration: '',
+					conc: true,
+					ritual: false,
+					classes: ['Druid', 'Cleric'],
+					d: ''
+				},
+				{
+					name: 'Thorn Whip',
+					level: 0,
+					school: 'Transmutation',
+					time: '',
+					range: '',
+					comp: '',
+					duration: '',
+					conc: false,
+					ritual: false,
+					classes: ['Druid'],
+					d: ''
+				}
+			]
+		});
 		const ch = blankCharacter();
-		ch.classId = 'wizard';
-		ch.spells.list = [
-			newSpell({ name: 'Mage Armor', level: 1 }),
-			newSpell({ name: 'Shield', level: 1 })
-		];
-		ch.active = { 'mage-armor': true, 'shield-spell': true };
-		const bytes = await buildPdf(ch, []);
-		const r = await readPdf(
-			bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+		ch.classId = 'ranger';
+		ch.level = 2;
+		const style = features(ch).find((f) => f.n === 'Fighting Style')!;
+		ch.picks[style.key] = { feat: 'druidic-warrior', asi: {} };
+		const all = features(ch);
+		const i = all.findIndex((f) => f.key === style.key);
+		const warrior = all[i + 1]; // the chosen feat follows its picker
+		expect(warrior.n).toBe('Druidic Warrior');
+		expect(warrior.choose?.[0]).toMatchObject({ list: 'spells:druid:0', count: 2 });
+		ch.choices[warrior.choose![0].key] = ['guidance', 'thorn-whip'];
+		expect(grantedSpells(ch).map((g) => g.name)).toEqual(
+			expect.arrayContaining(['Guidance', 'Thorn Whip'])
 		);
-		expect(r.character.active['mage-armor']).toBe(true);
-		expect(r.character.active['shield-spell']).toBe(true);
-		ch.active = {};
-		const b2 = await buildPdf(ch, []);
-		const r2 = await readPdf(
-			b2.buffer.slice(b2.byteOffset, b2.byteOffset + b2.byteLength) as ArrayBuffer
-		);
-		expect(r2.character.active['mage-armor']).toBeFalsy();
+		removePack('cantrips');
+	});
+
+	it('Magic Initiate has two choices; Skillful and Skilled give proficiencies', () => {
+		const ch = blankCharacter();
+		ch.backgroundId = 'sage';
+		const mi = features(ch).find((f) => f.n === 'Magic Initiate (Wizard)')!;
+		expect(mi.choose?.map((c) => c.list)).toEqual(['spells:wizard:0', 'spells:wizard:1']);
+		expect(mi.choose?.[1].key).toBe(`${mi.key}~1`);
+
+		ch.speciesId = 'human';
+		const skillful = features(ch).find((f) => f.n === 'Skillful')!;
+		ch.choices[skillful.key] = ['stealth'];
+		expect(skills(ch).stealth.prof).toBe(1);
+		expect(skills(ch).stealth.fromFeature).toBe('Skillful');
+	});
+
+	it('background tool choices fill the tool proficiencies', () => {
+		const ch = blankCharacter();
+		ch.backgroundId = 'soldier';
+		const cd = startingToolChoices(ch).find((x) => x.key === 'tools:background')!;
+		expect(cd.list).toBe('tools:gaming');
+		const first = Object.keys(allOptions(ch)['tools:gaming'].items)[0];
+		ch.choices[cd.key] = [first];
+		expect(toolProficiencies(ch)).toContain(allOptions(ch)['tools:gaming'].items[first].name);
 	});
 });
 
-describe('turn summary follows switches', () => {
-	it('includes active riders in the weapon line', () => {
+describe('backgrounds with choices', () => {
+	it('a custom background asks for two skills, a tool and an Origin feat', () => {
 		const ch = blankCharacter();
-		ch.classId = 'barbarian';
-		ch.level = 5;
-		ch.abilities = { str: 16, dex: 14, con: 16, int: 10, wis: 10, cha: 8 };
-		ch.attacks = [
-			newAttack({ name: 'Greataxe', weapon: 'greataxe', dice: '1d12', type: 'Slashing' })
-		];
-		ch.active = { rage: true };
-		expect(turnSummary(ch).action[0].lines?.[0]).toBe(
-			'Greataxe: +6 to hit, 1d12 + 5 Slashing (with Rage)'
-		);
+		ch.backgroundId = 'custom';
+		const sc = startingChoices(ch);
+		expect(sc.find((x) => x.key === 'skills:background')).toMatchObject({
+			list: 'skills',
+			count: 2
+		});
+		expect(sc.find((x) => x.key === 'tools:background')?.list).toBe('tools:any');
+		ch.choices['skills:background'] = ['arcana', 'stealth'];
+		expect(skills(ch).arcana.prof).toBe(1);
+		expect(skills(ch).stealth.fromFeature).toBe('Custom background');
+		expect(features(ch).some((f) => f.n === 'Origin Feat' && f.pick === 'origin')).toBe(true);
+	});
+
+	it('pack backgrounds can offer two feats, a skill choice and "X or Y" tools', () => {
+		installPack({
+			id: 'bgs',
+			name: 'Backgrounds',
+			backgrounds: {
+				spy: {
+					name: 'Spy',
+					abilities: ['dex', 'int', 'cha'],
+					freeAsi: true,
+					feat: '',
+					feats: ['alert', 'skilled'],
+					skills: ['stealth'],
+					skillChoice: { from: ['deception', 'insight'] },
+					tool: 'Disguise Kit or one kind of Gaming Set',
+					equipment: ''
+				}
+			}
+		});
+		const ch = blankCharacter();
+		ch.backgroundId = 'pack:bgs:spy';
+		const pick = features(ch).find((f) => f.n === 'Origin Feat')!;
+		expect(pick.pickFrom).toEqual(['alert', 'skilled']);
+		const tool = startingChoices(ch).find((x) => x.key === 'tools:background')!;
+		expect(tool.list).toBe('toolset:disguise-kit|tools:gaming');
+		ch.choices[tool.key] = ['disguise-kit'];
+		expect(toolProficiencies(ch)).toContain('Disguise Kit');
+		expect(backgroundTool(ch)).toBe('Disguise Kit');
+		ch.choices['skills:background'] = ['insight'];
+		expect(skills(ch).insight.prof).toBe(1);
+		expect(skills(ch).stealth.fromBg).toBe(true);
+		removePack('bgs');
+	});
+});
+
+describe('rules details', () => {
+	it('Rage regains one use per Short Rest; Bardic Inspiration recovers on Short Rests from level 5', () => {
+		const b = blankCharacter();
+		b.classId = 'barbarian';
+		expect(features(b).find((f) => f.n === 'Rage')?.r).toBe('short1');
+		const bard = blankCharacter();
+		bard.classId = 'bard';
+		bard.level = 4;
+		expect(features(bard).find((f) => f.n === 'Bardic Inspiration')?.r).toBe('long');
+		bard.level = 5;
+		expect(features(bard).find((f) => f.n === 'Bardic Inspiration')?.r).toBe('short');
+	});
+
+	it("initiative adds a Bard's Jack of All Trades, but not on top of Alert", () => {
+		const ch = blankCharacter();
+		ch.classId = 'bard';
+		ch.level = 6; // PB +3
+		ch.abilities.dex = 14;
+		expect(initiative(ch)).toBe(2 + 1);
+		ch.level = 1;
+		expect(initiative(ch)).toBe(2);
+	});
+
+	it('heavy armor you are too weak for slows you by 10 ft', () => {
+		const ch = blankCharacter();
+		ch.classId = 'fighter';
+		ch.abilities.str = 10;
+		ch.gear.armor = 'chainmail'; // Str 13
+		expect(speed(ch)).toBe(20);
+		ch.abilities.str = 13;
+		expect(speed(ch)).toBe(30);
+		ch.gear.armor = 'ringmail'; // no Strength requirement
+		ch.abilities.str = 8;
+		expect(speed(ch)).toBe(30);
+	});
+
+	it('a Forest Gnome casts Speak with Animals without a slot', () => {
+		const ch = blankCharacter();
+		ch.speciesId = 'gnome';
+		ch.lineage = 'forest';
+		const g = grantedSpells(ch);
+		expect(g.find((x) => x.name === 'Speak with Animals')?.kind).toBe('free');
+		expect(g.some((x) => x.name === 'Minor Illusion')).toBe(true);
+	});
+
+	it('a recap that only repeats the full text is recognised', () => {
+		const full = 'You gain Heroic Inspiration whenever you finish a Long Rest.';
+		expect(recapAddsNothing(full, full)).toBe(true);
+		expect(
+			recapAddsNothing(
+				'Proficiency in one skill of your choice.',
+				'You gain proficiency in one skill of your choice.'
+			)
+		).toBe(true);
+		// a number worked out for your level is worth keeping
+		expect(
+			recapAddsNothing(
+				'Bonus Action: regain 1d10 + 11 HP.',
+				'As a Bonus Action, regain Hit Points equal to 1d10 plus your Fighter level.'
+			)
+		).toBe(false);
 	});
 });
 
@@ -488,11 +640,7 @@ describe('advantage and disadvantage', () => {
 		expect(advMarker(advForSave(adv, 'wis'))?.text).toBe('ADV'); // Gnomish Cunning
 		expect(advMarker(advForSave(adv, 'dex'))?.text).toBe('adv*'); // Danger Sense, conditional
 		expect(advMarker(advForSkill(adv, 'stealth'))?.text).toBe('DIS'); // Scale Mail
-		expect(advMarker(advForSkill(adv, 'athletics'))?.text).toBe('adv*'); // Rage switch off
-		ch.active = { rage: true };
-		expect(advMarker(advForSkill(advantages(ch), 'athletics'))?.text).toBe('ADV');
-		ch.active = { unarmored: true };
-		expect(advForSkill(advantages(ch), 'stealth').some((e) => e.mode === 'dis')).toBe(false);
+		expect(advMarker(advForSkill(adv, 'athletics'))?.text).toBe('adv*'); // only while raging
 		ch.advCustom = [{ id: 'x', target: 'perception', mode: 'adv', cond: '' }];
 		expect(advMarker(advForSkill(advantages(ch), 'perception'))?.text).toBe('ADV');
 	});
@@ -579,9 +727,36 @@ describe('warlock pact weapon', () => {
 				}
 			}
 		});
-		const key = features(ch).find((f) => f.choose?.list === 'invocations')!.key;
+		const key = features(ch).find((f) => f.choose?.[0].list === 'invocations')!.key;
 		ch.choices[key] = ['thirsting-blade'];
 		expect(attacksPerAction(ch)).toBe(2);
 		removePack('inv-test');
+	});
+});
+
+describe('full rules texts', () => {
+	it('links features to pack texts and still builds the PDF', async () => {
+		installPack({
+			id: 'texts',
+			name: 'Texts',
+			texts: {
+				'class/fighter/second-wind': {
+					full: 'Long Second Wind wording.\nUsing It. Details.',
+					page: 91
+				},
+				'species/dwarf/stonecunning': { full: 'Full Stonecunning wording.' }
+			}
+		});
+		const ch = sampleCharacter();
+		const fs = features(ch);
+		const sw = fs.find((f) => f.n === 'Second Wind')!;
+		expect(sw.tkey).toBe('class/fighter/second-wind');
+		expect(rulesText(sw.tkey!)?.page).toBe(91);
+		expect(rulesKey('sub', "Dark One's Blessing", 'A/B')).toBe('sub/dark-ones-blessing/a-b');
+		expect(runIn('Using It. Details.')).toEqual(['Using It.', 'Details.']);
+		expect(runIn('You gain Resistance. More.')).toEqual(['', 'You gain Resistance. More.']);
+		// The full text replaces nothing in the data, it is only printed.
+		expect((await buildPdf(ch, [])).length).toBeGreaterThan(5000);
+		removePack('texts');
 	});
 });

@@ -21,16 +21,31 @@ export interface Feature {
 	a: ActionType;
 	d: Text;
 	u?: ((c: Ctx) => number) | string;
-	r?: Recharge;
+	r?: Recharge | ((c: Ctx) => Recharge);
 	pick?: PickKind;
+	/** Feats the picker offers (keys); absent means every feat of the pick's kind. */
+	pickFrom?: string[];
 	/** A placeholder that the chosen subclass fills in. */
 	subslot?: boolean;
 	/** Uses represent a pool of points (e.g. Lay On Hands) rather than checkboxes. */
 	pool?: boolean;
 	/** Spells this feature always prepares, by the level they arrive at. */
 	spells?: SpellGrant[];
-	/** Lets the player pick entries from a named option list (invocations, metamagic…). */
-	choose?: { list: string; count: ((c: Ctx) => number) | string; grant?: SpellKind };
+	/** Lets the player pick entries from named option lists (invocations, metamagic, cantrips…). */
+	choose?: ChooseDef | ChooseDef[];
+}
+
+/**
+ * A choice a feature or feat asks for: pick `count` entries from an option list.
+ * Several lists can be offered together by joining their keys with "|".
+ */
+export interface ChooseDef {
+	list: string;
+	count: ((c: Ctx) => number) | string;
+	/** How chosen spells are cast (cantrips are always known). */
+	grant?: SpellKind;
+	/** Heading shown above the choice, when the list's own label is not clear enough. */
+	label?: string;
 }
 
 /**
@@ -59,6 +74,12 @@ export interface OptionEffects {
 	expertise?: string;
 	/** Weapon key whose mastery you can use. */
 	mastery?: string;
+	/** Tool (or instrument, gaming set) proficiency. */
+	tool?: string;
+	/** Skill id that gains proficiency. */
+	skill?: string;
+	/** Skill id that gains proficiency, or Expertise if already proficient. */
+	skillUp?: string;
 }
 
 export interface OptionItem {
@@ -111,8 +132,19 @@ export interface SpeciesDef {
 export interface BackgroundDef {
 	name: string;
 	abilities: Ab[];
+	/**
+	 * true: at least +1 must go to one of `abilities`, the rest to any score (no score above +2).
+	 * Otherwise all three points go to `abilities`.
+	 */
+	freeAsi?: boolean;
+	/** Origin feat key; empty when the player chooses (see `feats`). */
 	feat: string;
+	/** Origin feats to choose one from; empty or absent means any Origin feat. */
+	feats?: string[];
 	skills: string[];
+	/** More skills to choose: `count` (default 1) from `from` (absent means any skill). */
+	skillChoice?: { count?: number; from?: string[] };
+	/** A tool, or a choice such as "Disguise Kit or one kind of Gaming Set". */
 	tool: string;
 	equipment: string;
 }
@@ -140,6 +172,8 @@ export interface FeatDef {
 	spells?: SpellGrant[];
 	/** Only offered to this class (e.g. Blessed Warrior for Paladins). */
 	forClass?: string;
+	/** Choices the feat asks for (cantrips, spells, tools…). */
+	choose?: ChooseDef | ChooseDef[];
 }
 
 export interface WeaponDef {
@@ -188,7 +222,7 @@ export interface Attack {
 	props: string;
 	range: string;
 	notes: string;
-	/** Rider id -> active. */
+	/** Rider id -> active (no longer used: riders are listed, not ticked). */
 	riders: Record<string, boolean>;
 	/** The target makes this saving throw instead of you rolling to hit (Sacred Flame, Burning Hands…). */
 	save?: Ab | '';
@@ -334,8 +368,6 @@ export interface Character {
 	picks: Record<string, Pick>;
 	/** Feature key -> chosen option keys (invocations, metamagic, maneuvers…). */
 	choices: Record<string, string[]>;
-	/** Situational switches that are on right now (raging, unarmored, Hunter's Mark…). */
-	active: Record<string, boolean>;
 	/** Advantage or disadvantage the player adds by hand (items, house rules). */
 	advCustom: { id: string; target: string; mode: 'adv' | 'dis'; cond: string }[];
 	edits: Record<string, FeatureEdit>;
@@ -348,15 +380,5 @@ export interface Character {
 		acMisc: number;
 		items: Item[];
 		coins: { cp: number; sp: number; ep: number; gp: number; pp: number };
-	};
-	notes: {
-		appearance: string;
-		personality: string;
-		ideals: string;
-		bonds: string;
-		flaws: string;
-		backstory: string;
-		allies: string;
-		other: string;
 	};
 }

@@ -35,6 +35,66 @@ export interface ContentPack {
 	backgrounds?: Record<string, BackgroundDef>;
 	spells?: SpellDef[];
 	options?: Record<string, OptionList>;
+	/** Full rules text by key (see rulesKey), for the printed sheet. */
+	texts?: Record<string, RulesText>;
+}
+
+/** The complete wording of a rule, and the page it is on in the pack's source book. */
+export interface RulesText {
+	full: string;
+	page?: number;
+}
+
+const slug = (s: string) =>
+	s
+		.toLowerCase()
+		.replace(/['’]/g, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
+
+/** Key for a rules text: kind plus names, e.g. rulesKey('class', 'Barbarian', 'Rage'). */
+export const rulesKey = (...parts: string[]) => parts.map(slug).join('/');
+
+/**
+ * Splits a rules paragraph into its bold run-in title ("Spell Slots.") and the rest.
+ * The title is a few Title Case words ending with a period; otherwise it is empty.
+ */
+export function runIn(p: string): [string, string] {
+	const m = /^([A-Z][A-Za-z0-9'’ ,/()+-]{1,48}?\.) (?=\S)/.exec(p);
+	if (!m || m[1].split(' ').length > 7) return ['', p];
+	const small = /^(of|the|a|an|and|or|to|with|in|on|for|your|level|\d.*|\(.*)$/;
+	const ok = m[1]
+		.slice(0, -1)
+		.split(' ')
+		.every((x) => /^[A-Z]/.test(x) || small.test(x));
+	return ok ? [m[1], p.slice(m[1].length + 1)] : ['', p];
+}
+
+/** Full text of a rule from the installed packs (later packs win). */
+const words = (s: string) =>
+	s
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, ' ')
+		.split(' ')
+		.filter(Boolean);
+
+/**
+ * True when a short recap only repeats the full wording: almost all its words are in the full
+ * text and it has no number the full text lacks (numbers worked out for the character's level
+ * make a recap worth printing).
+ */
+export function recapAddsNothing(recap: string, full: string): boolean {
+	const r = words(recap);
+	if (!r.length) return true;
+	const f = new Set(words(full));
+	if (r.some((w) => /\d/.test(w) && !f.has(w))) return false;
+	return r.filter((w) => f.has(w)).length / r.length >= 0.8;
+}
+
+export function rulesText(key: string): RulesText | null {
+	let out: RulesText | null = null;
+	for (const p of packs.list) out = p.texts?.[key] ?? out;
+	return out;
 }
 
 const KEY = 'hero-ledger:packs';

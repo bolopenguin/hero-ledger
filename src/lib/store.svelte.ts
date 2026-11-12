@@ -44,7 +44,6 @@ export function blankCharacter(): Character {
 		riders: [],
 		picks: {},
 		choices: {},
-		active: {},
 		advCustom: [],
 		edits: {},
 		features: [],
@@ -56,16 +55,6 @@ export function blankCharacter(): Character {
 			acMisc: 0,
 			items: [],
 			coins: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
-		},
-		notes: {
-			appearance: '',
-			personality: '',
-			ideals: '',
-			bonds: '',
-			flaws: '',
-			backstory: '',
-			allies: '',
-			other: ''
 		}
 	};
 }
@@ -151,9 +140,12 @@ export function normalize(raw: unknown): Character {
 		death: merge(base.death, o.death),
 		prof: merge(base.prof, o.prof),
 		spells: merge(base.spells, o.spells),
-		gear: { ...merge(base.gear, o.gear), coins: merge(base.gear.coins, o.gear?.coins) },
-		notes: merge(base.notes, o.notes)
+		gear: { ...merge(base.gear, o.gear), coins: merge(base.gear.coins, o.gear?.coins) }
 	};
+	// Fields from older versions: notes and the situational switches are no longer kept.
+	const legacy = ch as Character & { notes?: unknown; active?: unknown };
+	delete legacy.notes;
+	delete legacy.active;
 	ch.attacks = (ch.attacks ?? []).map((a) => newAttack(a));
 	ch.gear.items = (ch.gear.items ?? []).map((i) => newItem(i));
 	ch.spells.list = (ch.spells.list ?? []).map((s) => newSpell(s));
@@ -262,11 +254,6 @@ export function sampleCharacter(): Character {
 	];
 	ch.gear.acMisc = 1;
 	ch.gear.coins = { cp: 12, sp: 30, ep: 0, gp: 64, pp: 0 };
-	ch.notes.appearance =
-		'Broad-shouldered, braided copper beard, a notched shield-maiden tattoo on the left forearm.';
-	ch.notes.backstory =
-		'Served ten years in the Ironwatch garrison before her company was disbanded. Now she sells her axe to whoever pays in honest coin.';
-	ch.notes.personality = 'Blunt and steady. Hums marching songs when nervous.';
 	return ch;
 }
 

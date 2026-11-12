@@ -1,7 +1,17 @@
 // Derived values: everything the sheet calculates from the character's choices.
 import { by, CLASSES } from './data/classes';
-import { ARMOR, BACKGROUNDS, FEATS, FULL_SLOTS, SKILLS, SPECIES, WEAPONS } from './data/srd';
-import { dynamicOptions, STATIC_OPTIONS } from './data/options';
+import {
+	AB_NAMES,
+	ARMOR,
+	BACKGROUNDS,
+	FEATS,
+	FULL_SLOTS,
+	SKILLS,
+	SPECIES,
+	WEAPONS
+} from './data/srd';
+import { dynamicOptions, paramOptions, STATIC_OPTIONS } from './data/options';
+import { GEAR_BY_NAME } from './data/equipment';
 import { STATES, type StateCtx, type StateDef } from './data/states';
 import {
 	avgDice,
@@ -18,7 +28,8 @@ import {
 	allPackOptions,
 	allPackSpecies,
 	allPackSpells,
-	findPackSubclass
+	findPackSubclass,
+	rulesKey
 } from './packs.svelte';
 import {
 	ABILITIES,
@@ -86,7 +97,8 @@ export function getBackground(ch: Character): BackgroundDef | null {
 			abilities: [...ABILITIES],
 			feat: '',
 			skills: [],
-			tool: '',
+			skillChoice: { count: 2 },
+			tool: 'One tool of your choice',
 			equipment: ''
 		};
 	return BACKGROUNDS[ch.backgroundId] ?? allPackBackgrounds()[ch.backgroundId] ?? null;
@@ -215,6 +227,7 @@ export interface RFeature {
 	r: Recharge;
 	pool: boolean;
 	pick?: PickKind;
+	pickFrom?: string[];
 	placeholder: boolean;
 	edited: boolean;
 	notes: string;
@@ -226,8 +239,35 @@ export interface RFeature {
 	featKey?: string;
 	/** Always-prepared spells this feature gives. */
 	spells?: SpellGrant[];
-	/** Option list the player picks from, and how many. */
-	choose?: { list: string; count: number; grant?: SpellKind };
+	/** Choices the player makes on this feature: option lists to pick from, and how many. */
+	choose?: RChoice[];
+	/** Key of this rule's full text in the packs (see rulesKey). */
+	tkey?: string;
+}
+
+/** One choice on a feature, with the key its picks are stored under in `ch.choices`. */
+export interface RChoice {
+	key: string;
+	list: string;
+	count: number;
+	grant?: SpellKind;
+	label?: string;
+}
+
+/** Resolve a feature's choices for the character's level. The first keeps the feature's key. */
+function resolveChoices(defs: Feature['choose'], key: string, c: Ctx): RChoice[] | undefined {
+	if (!defs) return undefined;
+	const list = Array.isArray(defs) ? defs : [defs];
+	return list.map((d, i) => {
+		const n = typeof d.count === 'function' ? d.count(c) : (evalFormula(d.count, c) ?? 0);
+		return {
+			key: i ? `${key}~${i}` : key,
+			list: d.list,
+			count: Math.max(0, Math.floor(n)),
+			grant: d.grant,
+			label: d.label
+		};
+	});
 }
 
 function text(t: Feature['d'], c: Ctx) {
@@ -269,26 +309,20 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 		const key = extra.key ?? keyFor(src, f.l, f.n);
 		const e = ch.edits[key] ?? {};
 		const d = e.d !== undefined ? fillTemplate(e.d, c) : text(f.d, c);
-		const count = f.choose
-			? typeof f.choose.count === 'function'
-				? f.choose.count(c)
-				: (evalFormula(f.choose.count, c) ?? 0)
-			: 0;
 		const r: RFeature = {
 			key,
 			l: f.l,
 			n: e.n ?? f.n,
 			d,
 			spells: f.spells ?? parseGrants(d),
-			choose: f.choose
-				? { list: f.choose.list, count: Math.max(0, Math.floor(count)), grant: f.choose.grant }
-				: undefined,
+			choose: resolveChoices(f.choose, key, c),
 			a: f.a,
 			src,
 			uses: usesOf(f, c),
-			r: f.r ?? '',
+			r: (typeof f.r === 'function' ? f.r(c) : f.r) ?? '',
 			pool: !!f.pool,
 			pick: f.pick,
+			pickFrom: f.pickFrom,
 			placeholder: false,
 			edited: e.n !== undefined || e.d !== undefined,
 			notes: e.notes ?? '',
@@ -296,8 +330,14 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 			...extra
 		};
 		out.push(r);
-		// The feat chosen through a picker becomes its own entry.
-		if (f.pick) {
+		// The feat chosen through a picker becomes its own entry. Ability Score Improvement is a
+		// feat too, but a second entry would only repeat it: the chosen increases go on this one.
+		if (f.pick && ch.picks[key]?.feat === 'asi') {
+			const inc = ABILITIES.filter((ab) => ch.picks[key].asi?.[ab])
+				.map((ab) => `+${ch.picks[key].asi![ab]} ${AB_NAMES[ab]}`)
+				.join(', ');
+			r.d = `${r.d}${r.d ? ' ' : ''}Chosen: ${inc || 'ability scores (not picked yet)'}.`;
+		} else if (f.pick) {
 			const p = ch.picks[key];
 			if (p?.feat) {
 				const fd = allFeats()[p.feat];
@@ -313,7 +353,9 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 					a: fd?.a ?? 'passive',
 					src: 'Feat',
 					featKey: p.feat,
+					tkey: fd ? rulesKey('feat', fd.name) : undefined,
 					spells: fd?.spells,
+					choose: resolveChoices(fd?.choose, fk, c),
 					uses:
 						fd?.u !== undefined
 							? usesOf({ l: f.l, n: name, a: 'passive', d: '', u: fd.u }, c)
@@ -333,25 +375,28 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 	const cls = getClass(ch);
 	if (cls) {
 		const sub = subclassFeatures(ch, cls);
+		const subName = subclassName(ch);
 		for (const f of cls.features) {
 			if (f.subslot) {
 				const real = sub.feats.filter((s) => s.l === f.l);
 				if (real.length) {
-					for (const s of real) push(s, 'Subclass');
+					for (const s of real) push(s, 'Subclass', { tkey: rulesKey('sub', subName, s.n) });
 				} else if (sub.placeholders) {
 					push({ ...f, n: `${subclassName(ch) || 'Subclass'} feature`, d: '' }, 'Subclass', {
 						placeholder: true
 					});
 				}
-			} else push(f, 'Class');
+			} else push(f, 'Class', { tkey: rulesKey('class', cls.name, f.n) });
 		}
 		// Pack subclasses may grant features at levels that have no slot in the base class.
-		for (const s of sub.feats) if (!cls.subLevels.includes(s.l)) push(s, 'Subclass');
+		for (const s of sub.feats)
+			if (!cls.subLevels.includes(s.l))
+				push(s, 'Subclass', { tkey: rulesKey('sub', subName, s.n) });
 	}
 
 	const sp = getSpecies(ch);
 	if (sp) {
-		for (const f of sp.features) push(f, 'Species');
+		for (const f of sp.features) push(f, 'Species', { tkey: rulesKey('species', sp.name, f.n) });
 		const lin = sp.lineages?.find((x) => x.id === ch.lineage);
 		if (lin) push({ l: 1, n: lin.name, a: 'passive', d: lin.d, spells: lin.spells }, 'Species');
 	}
@@ -369,10 +414,11 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 					u: fd.u,
 					r: fd.r,
 					pool: fd.pool,
-					spells: fd.spells
+					spells: fd.spells,
+					choose: fd.choose
 				},
 				'Background',
-				{ featKey: bg.feat }
+				{ featKey: bg.feat, tkey: rulesKey('feat', fd.name) }
 			);
 		else
 			push(
@@ -381,7 +427,10 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 					n: 'Origin Feat',
 					a: 'passive',
 					pick: 'origin',
-					d: 'Your background grants an Origin feat.'
+					pickFrom: bg.feats?.length ? bg.feats : undefined,
+					d: bg.feats?.length
+						? `Your background grants one of these Origin feats: ${bg.feats.map((k) => allFeats()[k]?.name ?? k).join(' or ')}.`
+						: 'Your background grants an Origin feat of your choice.'
 				},
 				'Background'
 			);
@@ -409,7 +458,48 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 	}
 
 	const order = { Class: 0, Subclass: 1, Species: 2, Background: 3, Feat: 4, Custom: 5 };
-	return out.sort((a, b) => a.l - b.l || order[a.src] - order[b.src]);
+	out.sort((a, b) => a.l - b.l || order[a.src] - order[b.src]);
+	// A feat chosen through a picker comes right after the feature that offers it.
+	const keys = new Set(out.map((f) => f.key));
+	const byParent = new Map<string, RFeature[]>();
+	for (const f of out)
+		if (f.pickedBy && keys.has(f.pickedBy))
+			byParent.set(f.pickedBy, [...(byParent.get(f.pickedBy) ?? []), f]);
+	return out
+		.filter((f) => !f.pickedBy || !keys.has(f.pickedBy))
+		.flatMap((f) => [f, ...(byParent.get(f.key) ?? [])]);
+}
+
+/** Page anchor of a feature card, so lists can link to it. */
+export const featureAnchor = (key: string) =>
+	'feature-' + key.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+/** Features with a choice still to make: a feat to pick, or options short of their count. */
+export function openChoices(ch: Character, feats = features(ch)): RFeature[] {
+	return feats.filter(
+		(f) =>
+			!f.hidden &&
+			((f.pick && !ch.picks[f.key]?.feat) ||
+				(f.choose ?? []).some((cd) => (ch.choices[cd.key]?.length ?? 0) < cd.count))
+	);
+}
+
+/** Whether a feature belongs to the character's origin: species or background, or a feat they give. */
+export function originOf(f: RFeature): 'Species' | 'Background' | null {
+	if (f.src === 'Species' || f.pickedBy?.startsWith('Species|')) return 'Species';
+	if (f.src === 'Background' || f.pickedBy?.startsWith('Background|')) return 'Background';
+	return null;
+}
+
+/** The background's tool: the one chosen when the background lets you pick. */
+export function backgroundTool(ch: Character): string {
+	const bg = getBackground(ch);
+	if (!bg?.tool) return '';
+	const cd = startingToolChoices(ch).find((x) => x.key === 'tools:background');
+	if (!cd) return bg.tool;
+	const list = optionList(allOptions(ch), cd.list);
+	const names = (ch.choices[cd.key] ?? []).map((k) => list?.items[k]?.name).filter(Boolean);
+	return names.length ? names.join(', ') : bg.tool;
 }
 
 /** Feature keys that currently apply (used to ignore picks from levels you no longer have). */
@@ -462,6 +552,20 @@ export function allOptions(ch: Character): Record<string, OptionList> {
 	return { ...STATIC_OPTIONS, ...dynamicOptions(ch.classId, allPackSpells()), ...allPackOptions() };
 }
 
+/** An option list by key; "a|b" offers the items of several lists together. */
+export function optionList(lists: Record<string, OptionList>, key: string): OptionList | undefined {
+	if (!key.includes('|')) return lists[key] ?? paramOptions(key);
+	const parts = key
+		.split('|')
+		.map((k) => lists[k] ?? paramOptions(k))
+		.filter((l): l is OptionList => !!l);
+	if (!parts.length) return undefined;
+	return {
+		label: parts.map((l) => l.label).join(' or '),
+		items: Object.assign({}, ...parts.map((l) => l.items))
+	};
+}
+
 export interface ChosenOption {
 	featureKey: string;
 	feature: string;
@@ -475,21 +579,27 @@ export interface ChosenOption {
 export function chosenOptions(ch: Character, feats = features(ch)): ChosenOption[] {
 	const lists = allOptions(ch);
 	const out: ChosenOption[] = [];
-	for (const f of feats) {
-		if (!f.choose || f.hidden) continue;
-		const list = lists[f.choose.list];
-		const picked = (ch.choices[f.key] ?? []).slice(0, f.choose.count);
-		for (const k of picked) {
-			const item = list?.items[k];
-			if (item && (item.l ?? 1) <= ch.level)
-				out.push({
-					featureKey: f.key,
-					feature: f.n,
-					list: f.choose.list,
-					key: k,
-					item,
-					grant: f.choose.grant
-				});
+	const groups: { n: string; choose?: RChoice[]; hidden?: boolean }[] = [
+		...feats,
+		...startingChoices(ch).map((cd) => ({ n: cd.source, choose: [cd] }))
+	];
+	for (const f of groups) {
+		if (f.hidden) continue;
+		for (const cd of f.choose ?? []) {
+			const list = optionList(lists, cd.list);
+			const picked = (ch.choices[cd.key] ?? []).slice(0, cd.count);
+			for (const k of picked) {
+				const item = list?.items[k];
+				if (item && (item.l ?? 1) <= ch.level)
+					out.push({
+						featureKey: cd.key,
+						feature: f.n,
+						list: cd.list,
+						key: k,
+						item,
+						grant: cd.grant
+					});
+			}
 		}
 	}
 	return out;
@@ -504,6 +614,10 @@ export function optionEffects(ch: Character) {
 		skillBonus: [] as [string, Ab, string][],
 		expertise: new Set<string>(),
 		mastery: new Set<string>(),
+		tools: [] as string[],
+		/** Skill id -> feature that gives proficiency in it. */
+		skills: new Map<string, string>(),
+		skillUp: new Map<string, string>(),
 		riders: [] as Rider[]
 	};
 	for (const o of chosenOptions(ch)) {
@@ -516,6 +630,9 @@ export function optionEffects(ch: Character) {
 			fx.skillBonus.push([sk, ab, o.item.name]);
 		if (e.expertise) fx.expertise.add(e.expertise);
 		if (e.mastery) fx.mastery.add(e.mastery);
+		if (e.tool) fx.tools.push(e.tool);
+		if (e.skill) fx.skills.set(e.skill, o.feature);
+		if (e.skillUp) fx.skillUp.set(e.skillUp, o.feature);
 		if (e.rider) fx.riders.push({ ...e.rider, id: `opt:${o.list}:${o.key}` });
 	}
 	return fx;
@@ -591,12 +708,24 @@ export function skills(ch: Character, sc = scores(ch)) {
 	const fx = optionEffects(ch);
 	const out: Record<
 		string,
-		{ prof: number; fromBg: boolean; fromChoice: boolean; value: number; ab: Ab; extra: string[] }
+		{
+			prof: number;
+			fromBg: boolean;
+			/** Feature or feat whose choice gives proficiency (Skillful, Skilled…). */
+			fromFeature: string;
+			fromChoice: boolean;
+			value: number;
+			ab: Ab;
+			extra: string[];
+		}
 	> = {};
 	for (const [id, s] of Object.entries(SKILLS)) {
 		const fromBg = !!bg?.skills.includes(id);
-		const fromChoice = fx.expertise.has(id);
-		const prof = fromChoice ? 2 : Math.max(ch.skills[id] ?? 0, fromBg ? 1 : 0);
+		const fromFeature = fx.skills.get(id) ?? '';
+		const own = Math.max(ch.skills[id] ?? 0, fromBg || fromFeature ? 1 : 0);
+		const up = fx.skillUp.has(id);
+		const fromChoice = fx.expertise.has(id) || (up && own >= 1);
+		const prof = fromChoice ? 2 : up ? 1 : own;
 		let add = prof === 2 ? c.pb * 2 : prof === 1 ? c.pb : jack ? Math.floor(c.pb / 2) : 0;
 		const extra: string[] = [];
 		for (const [sk, ab, from] of fx.skillBonus)
@@ -608,6 +737,7 @@ export function skills(ch: Character, sc = scores(ch)) {
 		out[id] = {
 			prof,
 			fromBg,
+			fromFeature: fromFeature || (up && !fromChoice ? (fx.skillUp.get(id) ?? '') : ''),
 			fromChoice,
 			ab: s.ab,
 			extra,
@@ -617,10 +747,14 @@ export function skills(ch: Character, sc = scores(ch)) {
 	return out;
 }
 
-export function armorClass(ch: Character, sc = scores(ch)) {
+/**
+ * Armor Class. `on` lists situational effects to count (Mage Armor, Shield of Faith…):
+ * the sheet itself counts none, the PDF prints the AC you get with each one.
+ */
+export function armorClass(ch: Character, sc = scores(ch), on: string[] = []) {
 	const c = makeCtx(ch, sc);
 	const dex = c.m('dex');
-	const states = activeStates(ch, sc);
+	const states = availableStates(ch, sc).filter((st) => on.includes(st.id));
 	const sctx = stateCtx(ch, sc);
 	const unarmored = states.some((st) => st.ac?.ignoreArmor);
 	const armor = unarmored ? undefined : ARMOR[ch.gear.armor];
@@ -682,7 +816,7 @@ export function armorClass(ch: Character, sc = scores(ch)) {
 	};
 }
 
-// ---------- Situational switches ----------
+// ---------- Situational effects ----------
 
 export function stateCtx(ch: Character, sc = scores(ch)): StateCtx {
 	const c = makeCtx(ch, sc);
@@ -705,15 +839,33 @@ export function stateCtx(ch: Character, sc = scores(ch)): StateCtx {
 	};
 }
 
-/** Switches that make sense for this character. */
+/** Situational effects that apply to this character (raging, Hunter's Mark, Mage Armor…). */
 export function availableStates(ch: Character, sc = scores(ch)): StateDef[] {
 	const ctx = stateCtx(ch, sc);
 	return STATES.filter((st) => st.available(ctx));
 }
 
-/** Switches that are on and still apply. */
-export function activeStates(ch: Character, sc = scores(ch)): StateDef[] {
-	return availableStates(ch, sc).filter((st) => ch.active?.[st.id]);
+/** What a situational effect changes, in words, e.g. "AC 15; +2 damage on Str attacks…". */
+export function stateSummary(ch: Character, st: StateDef, sc = scores(ch)): string {
+	const ctx = stateCtx(ch, sc);
+	const fx: string[] = [];
+	if (st.ac?.bonus) fx.push(`+${st.ac.bonus} AC`);
+	if (st.ac?.min) fx.push(`AC at least ${st.ac.min}`);
+	if (st.ac?.ignoreArmor || st.ac?.base) fx.push(`AC ${armorClass(ch, sc, [st.id]).value}`);
+	if (st.speed) fx.push(`+${st.speed} ft Speed`);
+	if (st.spellDc) fx.push(`spell DC ${spellcasting(ch, sc).dc + st.spellDc}`);
+	const kinds: Record<Rider['applies'], string> = {
+		weapon: 'weapon attacks',
+		all: 'all attacks',
+		melee: 'melee attacks',
+		ranged: 'ranged attacks',
+		spell: 'spell attacks'
+	};
+	for (const r of st.riders?.(ctx) ?? [])
+		fx.push(
+			`${r.name}: ${r.dmg ? `+${r.dmg}${r.type ? ' ' + r.type : ''}` : ''}${r.hit ? ` ${signed(r.hit)} to hit` : ''} (${kinds[r.applies]}${r.with?.length ? ', with ' + r.with.join(' + ') : ''})`
+		);
+	return [fx.join('; '), st.notes?.(ctx)].filter(Boolean).join('. ');
 }
 
 export function hpMax(ch: Character, sc = scores(ch)) {
@@ -726,7 +878,7 @@ export function hpMax(ch: Character, sc = scores(ch)) {
 	return Math.max(1, ov(ch, 'hpMax', v));
 }
 
-export function speed(ch: Character) {
+export function speed(ch: Character, sc = scores(ch)) {
 	const sp = getSpecies(ch);
 	let v = sp?.speed ?? 30;
 	if (ch.speciesId === 'elf' && ch.lineage === 'wood') v = 35;
@@ -741,14 +893,22 @@ export function speed(ch: Character) {
 			[18, 30]
 		]);
 	if (ch.classId === 'ranger' && ch.level >= 6 && armor?.type !== 'heavy') v += 10;
+	// Armor you are too weak to wear properly slows you down.
+	if (armor?.str && sc.str.total < armor.str) v -= 10;
 	for (const f of activeFeats(ch)) v += f.def.speed ?? 0;
-	for (const st of activeStates(ch)) v += st.speed ?? 0;
 	return Math.max(0, ov(ch, 'speed', v));
 }
 
 export function initiative(ch: Character, sc = scores(ch)) {
 	const c = makeCtx(ch, sc);
-	return ov(ch, 'init', c.m('dex') + (hasFeat(ch, 'alert') ? c.pb : 0));
+	// Initiative is a Dexterity check: Alert adds the Proficiency Bonus, and a Bard's Jack of
+	// All Trades adds half of it when nothing else does.
+	const jack = ch.classId === 'bard' && ch.level >= 2 && !hasFeat(ch, 'alert');
+	return ov(
+		ch,
+		'init',
+		c.m('dex') + (hasFeat(ch, 'alert') ? c.pb : jack ? Math.floor(c.pb / 2) : 0)
+	);
 }
 
 export function darkvision(ch: Character) {
@@ -806,11 +966,7 @@ export function spellcasting(ch: Character, sc = scores(ch)) {
 		list: (fromSub && sub?.spellList) || cls?.name.toLowerCase() || '',
 		caster: caster ?? null,
 		mod: m,
-		dc: ov(
-			ch,
-			'spellDc',
-			8 + m + c.pb + innate + activeStates(ch, sc).reduce((t, st) => t + (st.spellDc ?? 0), 0)
-		),
+		dc: ov(ch, 'spellDc', 8 + m + c.pb + innate),
 		atk: ov(ch, 'spellAtk', m + c.pb),
 		slots: [...slots, 0, 0, 0, 0, 0, 0, 0, 0, 0].slice(0, 9),
 		pact,
@@ -919,6 +1075,97 @@ export function masteredWeapons(ch: Character): Set<string> {
 	return optionEffects(ch).mastery;
 }
 
+function toolChoice(text: string, key: string, label: string): RChoice | null {
+	const t = text.replace(/’/g, "'").trim();
+	const parts = t.replace(/^choose\s+/i, '').split(/\s+or\s+/i);
+	if (parts.length < 2 && !/one kind|choose|^(one|two|three)\b|of your choice/i.test(t))
+		return null;
+	const lists: string[] = [];
+	const specific: string[] = [];
+	for (const p of parts) {
+		if (/artisan/i.test(p)) lists.push('tools:artisan');
+		else if (/instrument/i.test(p)) lists.push('tools:instrument');
+		else if (/gaming/i.test(p)) lists.push('tools:gaming');
+		else if (/\btools?\b.*\bchoice\b|\bany tool/i.test(p)) lists.push('tools:any');
+		else {
+			const name = p
+				.replace(/^(one|a|an)\s+/i, '')
+				.trim()
+				.toLowerCase();
+			const g = GEAR_BY_NAME.get(name);
+			if (g) specific.push(g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+		}
+	}
+	if (specific.length) lists.unshift(`toolset:${specific.join(',')}`);
+	if (!lists.length) return null;
+	const count = /^three\b/i.test(t) ? 3 : /^two\b/i.test(t) ? 2 : 1;
+	return { key, list: [...new Set(lists)].join('|'), count, label };
+}
+
+/** A choice the class or background asks for, with where it comes from. */
+export type StartingChoice = RChoice & { source: string };
+
+/**
+ * Choices the class and background ask for: tools ("one kind of Gaming Set", "Disguise Kit or
+ * Forgery Kit") and the background's extra skill.
+ */
+export function startingChoices(ch: Character): StartingChoice[] {
+	const cls = getClass(ch);
+	const bg = getBackground(ch);
+	const out: StartingChoice[] = [];
+	const ct = cls?.tools ? toolChoice(cls.tools, 'tools:class', `${cls.name} tools`) : null;
+	if (ct && cls) out.push({ ...ct, source: cls.name });
+	if (bg) {
+		const source = /background/i.test(bg.name) ? bg.name : `${bg.name} background`;
+		const bt = bg.tool ? toolChoice(bg.tool, 'tools:background', 'Tool') : null;
+		if (bt) out.push({ ...bt, source });
+		if (bg.skillChoice) {
+			const from = bg.skillChoice.from?.filter((id) => SKILLS[id]);
+			out.push({
+				key: 'skills:background',
+				list: from?.length ? `skills:${from.join(',')}` : 'skills',
+				count: bg.skillChoice.count ?? 1,
+				label: 'Skill',
+				source
+			});
+		}
+	}
+	return out;
+}
+
+/** The tool choices among the starting choices. */
+export function startingToolChoices(ch: Character): StartingChoice[] {
+	return startingChoices(ch).filter((x) => x.key.startsWith('tools:'));
+}
+
+/** Every tool proficiency the character has: fixed ones, and the ones chosen. */
+export function toolProficiencies(ch: Character): string[] {
+	const lists = allOptions(ch);
+	const out: string[] = [];
+	const cls = getClass(ch);
+	const bg = getBackground(ch);
+	const choices = startingToolChoices(ch);
+	for (const [text, key] of [
+		[cls?.tools, 'tools:class'],
+		[bg?.tool, 'tools:background']
+	] as const) {
+		if (!text) continue;
+		const cd = choices.find((x) => x.key === key);
+		if (!cd) {
+			out.push(text);
+			continue;
+		}
+		const list = optionList(lists, cd.list);
+		const names = (ch.choices[key] ?? [])
+			.slice(0, cd.count)
+			.map((k) => list?.items[k]?.name)
+			.filter((n): n is string => !!n);
+		out.push(...(names.length ? names : [text]));
+	}
+	out.push(...optionEffects(ch).tools);
+	return [...new Set(out)];
+}
+
 /** Armor and weapon training granted by chosen options (e.g. Divine Order: Protector). */
 export function extraTraining(ch: Character) {
 	const fx = optionEffects(ch);
@@ -937,10 +1184,9 @@ export function riderApplies(r: Rider, a: Attack) {
 	return r.applies === a.kind;
 }
 
-export function riderActive(r: Rider, a: Attack, ch?: Character) {
-	if (r.state && ch) return r.state.every((id) => !!ch.active?.[id]);
-	const v = a.riders[r.id];
-	return v === undefined ? ALWAYS_ON.has(r.id) : v;
+/** Riders counted in an attack's numbers: only the ones that always apply. The rest are listed. */
+export function riderActive(r: Rider) {
+	return !r.state && ALWAYS_ON.has(r.id);
 }
 
 export function attackAbility(ch: Character, a: Attack, sc = scores(ch)): Ab {
@@ -981,7 +1227,7 @@ export function attack(ch: Character, a: Attack, sc = scores(ch)): AttackResult 
 	const m = c.m(ability);
 	const riders = allRiders(ch, sc)
 		.filter((r) => riderApplies(r, a))
-		.map((r) => ({ r, on: riderActive(r, a, ch), terms: parseDice(fillTemplate(r.dmg, c)) }));
+		.map((r) => ({ r, on: riderActive(r), terms: parseDice(fillTemplate(r.dmg, c)) }));
 	let dice = a.twoHanded && a.versatile ? a.versatile : a.dice;
 	const wd = WEAPONS[a.weapon];
 	const monkWeapon =

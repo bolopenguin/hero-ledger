@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { Plus, Trash2, Swords } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { armorClass, attunementMax, carrying, getBackground, getClass, scores } from '$lib/calc';
+	import { armorClass, attunementMax, carrying, scores } from '$lib/calc';
 	import {
-		CLASS_STARTING,
 		GEAR,
 		GEAR_BY_NAME,
 		GEAR_CAT_LABEL,
-		parseBackgroundEquipment,
 		type GearCat,
-		type GearDef,
-		type StartingOption
+		type GearDef
 	} from '$lib/data/equipment';
 	import { ARMOR, WEAPONS } from '$lib/data/srd';
 	import { newAttack, newItem } from '$lib/store.svelte';
@@ -110,23 +107,6 @@
 		addedMsg = `Added ${def.name}${def.contents ? ' (unpacked)' : ''}.`;
 		setTimeout(() => (addedMsg = ''), 2500);
 	}
-	function takeStarting(o: StartingOption, from: string) {
-		for (const [n, q] of o.items) {
-			const def = GEAR_BY_NAME.get(n.toLowerCase());
-			if (def?.contents) for (const [cn, cq] of def.contents) pushGear(cn, cq * q, 'Backpack');
-			else pushGear(n, q, 'Backpack');
-		}
-		ch.gear.coins.gp += o.gp;
-		addedMsg = `${from} option ${o.label} added${o.gp ? ` with ${o.gp} GP` : ''}.`;
-		setTimeout(() => (addedMsg = ''), 3500);
-	}
-	const classStart = $derived(CLASS_STARTING[ch.classId] ?? []);
-	const bgDef = $derived(getBackground(ch));
-	const bgStart = $derived(bgDef?.equipment ? parseBackgroundEquipment(bgDef.equipment) : []);
-	const describe = (o: StartingOption) =>
-		[...o.items.map(([n, q]) => (q > 1 ? `${q} × ${n}` : n)), o.gp ? `${o.gp} GP` : '']
-			.filter(Boolean)
-			.join(', ');
 
 	const coinNames = [
 		['cp', 'Copper'],
@@ -224,35 +204,6 @@
 			<p class="mt-1 text-sm">Gear value <span class="num">{valueTotal}</span> GP</p>
 		</section>
 	</div>
-
-	{#if classStart.length || bgStart.length}
-		<details class="panel" open={!ch.gear.items.length}>
-			<summary class="panel-title mb-0 cursor-pointer">Starting equipment</summary>
-			<p class="mt-1 text-xs text-base-content/60">
-				Pick one option from your class and one from your background. Items go to your inventory
-				(packs unpacked), gold to your coins.
-			</p>
-			<div class="mt-2 grid gap-3 md:grid-cols-2">
-				{#each [[getClass(ch)?.name ?? 'Class', classStart], [bgDef?.name ?? 'Background', bgStart]] as [from, opts] (from)}
-					{#if (opts as StartingOption[]).length}
-						<div class="flex flex-col gap-1.5">
-							<span class="label-xs">{from}</span>
-							{#each opts as StartingOption[] as o (o.label)}
-								<button
-									type="button"
-									class="btn h-auto justify-start py-1.5 text-left font-normal normal-case btn-sm"
-									onclick={() => takeStarting(o, from as string)}
-								>
-									<Plus class="size-3.5 shrink-0" /><b>{o.label}</b>
-									<span class="text-base-content/75">{describe(o)}</span>
-								</button>
-							{/each}
-						</div>
-					{/if}
-				{/each}
-			</div>
-		</details>
-	{/if}
 
 	<section class="panel" aria-labelledby="cat-h">
 		<div class="flex flex-wrap items-center gap-2">
