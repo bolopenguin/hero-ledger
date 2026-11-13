@@ -5,7 +5,6 @@ import {
 	armorClass,
 	attack,
 	attunementMax,
-	carrying,
 	darkvision,
 	features,
 	getBackground,
@@ -956,12 +955,11 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 	// ---------------- Equipment ----------------
 	w.newPage();
 	w.heading('Equipment');
-	const carry = carrying(ch, sc);
 	w.y -= 14;
 	const worn = [wornArmor(ch)?.name ?? 'No armor', ...wornShields(ch).map((x) => x.name)];
 	w.text(`${worn.join(' + ')} - AC ${ac.value}`, M, w.y, 9.5, w.b);
 	w.text(
-		`Carrying ${carry.total} / ${carry.cap} lb   |   Attuned ${ch.gear.items.filter((i) => i.attuned).length} / ${attunementMax(ch)}`,
+		`Attuned ${ch.gear.items.filter((i) => i.attuned).length} / ${attunementMax(ch)}`,
 		M + 260,
 		w.y,
 		8.5,

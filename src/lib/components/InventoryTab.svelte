@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import { armorClass, attack, attunementMax, carrying, hitText, scores, signed } from '$lib/calc';
+	import {
+		armorClass,
+		attack,
+		attunementMax,
+		coinsWeight,
+		hitText,
+		scores,
+		signed
+	} from '$lib/calc';
 	import {
 		GEAR,
 		GEAR_BY_NAME,
@@ -17,7 +25,7 @@
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
 	const ac = $derived(armorClass(ch, sc));
-	const carry = $derived(carrying(ch, sc));
+	const coinLb = $derived(coinsWeight(ch));
 	const attuned = $derived(ch.gear.items.filter((i) => i.attuned).length);
 	const maxAttune = $derived(attunementMax(ch));
 	const armorItems = $derived(ch.gear.items.filter((i) => i.kind === 'armor'));
@@ -202,7 +210,7 @@
 			</div>
 			<p class="mt-3 text-sm">
 				Worth <span class="num font-semibold">{gpTotal}</span> GP · weighs
-				<span class="num">{carry.coinsWeight.toFixed(1)}</span> lb
+				<span class="num">{coinLb.toFixed(1)}</span> lb
 			</p>
 			<p class="text-xs text-base-content/60">
 				1 PP = 10 GP = 20 EP = 100 SP = 1,000 CP. 50 coins weigh 1 lb.
@@ -210,19 +218,8 @@
 		</section>
 
 		<section class="panel" aria-labelledby="load-h">
-			<h2 id="load-h" class="panel-title">Load & attunement</h2>
+			<h2 id="load-h" class="panel-title">Attunement</h2>
 			<p class="text-sm">
-				Carrying <span class="num font-semibold">{carry.total}</span> /
-				<span class="num">{carry.cap}</span> lb
-			</p>
-			<progress
-				class="progress {carry.total > carry.cap
-					? 'progress-error'
-					: 'progress-primary'} mt-1 w-full"
-				value={Math.min(carry.total, carry.cap)}
-				max={carry.cap}
-			></progress>
-			<p class="mt-3 text-sm">
 				Attuned <span class="num font-semibold {attuned > maxAttune ? 'text-error' : ''}"
 					>{attuned}</span
 				>

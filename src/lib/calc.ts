@@ -951,13 +951,9 @@ export function darkvision(ch: Character) {
 	return sp?.darkvision ?? 0;
 }
 
-export function carrying(ch: Character, sc = scores(ch)) {
-	const mult = ch.speciesId === 'goliath' ? 2 : 1;
-	const cap = sc.str.total * 15 * mult;
-	const coins = Object.values(ch.gear.coins).reduce((a, b) => a + (b || 0), 0);
-	const items = ch.gear.items.reduce((a, i) => a + (i.weight || 0) * (i.qty || 0), 0);
-	const total = items + coins / 50;
-	return { cap, total: Math.round(total * 100) / 100, coinsWeight: coins / 50 };
+/** What the coins weigh, in lb (50 coins make 1 lb). */
+export function coinsWeight(ch: Character) {
+	return Object.values(ch.gear.coins).reduce((a, b) => a + (b || 0), 0) / 50;
 }
 
 export function attunementMax(ch: Character) {
