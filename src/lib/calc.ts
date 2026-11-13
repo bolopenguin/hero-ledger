@@ -951,11 +951,6 @@ export function darkvision(ch: Character) {
 	return sp?.darkvision ?? 0;
 }
 
-/** What the coins weigh, in lb (50 coins make 1 lb). */
-export function coinsWeight(ch: Character) {
-	return Object.values(ch.gear.coins).reduce((a, b) => a + (b || 0), 0) / 50;
-}
-
 export function attunementMax(ch: Character) {
 	return ch.classId === 'rogue' && ch.subclassId === 'srd' && ch.level >= 13 ? 4 : 3;
 }

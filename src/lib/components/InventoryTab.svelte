@@ -1,15 +1,7 @@
 <script lang="ts">
 	import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-svelte';
 	import { currentChar } from '$lib/current.svelte';
-	import {
-		armorClass,
-		attack,
-		attunementMax,
-		coinsWeight,
-		hitText,
-		scores,
-		signed
-	} from '$lib/calc';
+	import { armorClass, attack, attunementMax, hitText, scores, signed } from '$lib/calc';
 	import {
 		GEAR,
 		GEAR_BY_NAME,
@@ -25,7 +17,6 @@
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
 	const ac = $derived(armorClass(ch, sc));
-	const coinLb = $derived(coinsWeight(ch));
 	const attuned = $derived(ch.gear.items.filter((i) => i.attuned).length);
 	const maxAttune = $derived(attunementMax(ch));
 	const armorItems = $derived(ch.gear.items.filter((i) => i.kind === 'armor'));
@@ -209,12 +200,9 @@
 				{/each}
 			</div>
 			<p class="mt-3 text-sm">
-				Worth <span class="num font-semibold">{gpTotal}</span> GP · weighs
-				<span class="num">{coinLb.toFixed(1)}</span> lb
+				Worth <span class="num font-semibold">{gpTotal}</span> GP
 			</p>
-			<p class="text-xs text-base-content/60">
-				1 PP = 10 GP = 20 EP = 100 SP = 1,000 CP. 50 coins weigh 1 lb.
-			</p>
+			<p class="text-xs text-base-content/60">1 PP = 10 GP = 20 EP = 100 SP = 1,000 CP.</p>
 		</section>
 
 		<section class="panel" aria-labelledby="load-h">
@@ -341,15 +329,6 @@
 								type="number"
 								class="num input input-sm"
 								bind:value={it.armor.bonus}
-							/></label
-						>
-						<label class="flex flex-col"
-							>Weight (lb)<input
-								type="number"
-								min="0"
-								step="0.25"
-								class="num input input-sm"
-								bind:value={it.weight}
 							/></label
 						>
 						<label class="flex flex-col"
@@ -482,15 +461,6 @@
 								/></label
 							>
 							<label class="flex flex-col"
-								>Weight (lb)<input
-									type="number"
-									min="0"
-									step="0.25"
-									class="num input input-sm"
-									bind:value={it.weight}
-								/></label
-							>
-							<label class="flex flex-col"
 								>Value (GP)<input
 									type="number"
 									min="0"
@@ -532,8 +502,8 @@
 		<div class="flex flex-wrap items-center gap-2">
 			<h2 id="cat-h" class="panel-title mb-0">Equipment catalog</h2>
 			<span class="text-xs text-base-content/60"
-				>{GEAR.length} items from the rules, with cost, weight and what they do. Weapons and armor go
-				to their own lists above.</span
+				>{GEAR.length} items from the rules, with cost and what they do. Weapons and armor go to their
+				own lists above.</span
 			>
 			<button type="button" class="btn ml-auto btn-sm" onclick={() => (showCatalog = !showCatalog)}
 				>{showCatalog ? 'Close' : 'Browse'}</button
@@ -564,7 +534,7 @@
 							<Plus class="size-3.5 shrink-0 translate-y-0.5" />
 							<span class="font-semibold">{gi.name}</span>
 							<span class="num text-xs whitespace-nowrap text-base-content/60"
-								>{fmtCost(gi.cost)} · {gi.weight} lb</span
+								>{fmtCost(gi.cost)}</span
 							>
 							<span class="truncate text-xs text-base-content/60"
 								>{gi.contents
@@ -607,9 +577,6 @@
 			{@const items = plainItems.filter((i) => (i.location || 'Backpack') === loc)}
 			<h3 class="mt-3 flex items-baseline gap-2 font-display font-bold text-primary">
 				{loc}
-				<span class="num text-xs font-normal text-base-content/50"
-					>{Math.round(items.reduce((a, i) => a + i.weight * i.qty, 0) * 100) / 100} lb</span
-				>
 				<button
 					type="button"
 					class="btn ml-auto btn-ghost font-sans btn-xs"
@@ -620,13 +587,12 @@
 				<table class="table min-w-[50rem] table-sm">
 					<thead>
 						<tr class="label-xs"
-							><th>Item</th><th class="w-16">Qty</th><th class="w-20">Weight</th><th class="w-20"
-								>Value GP</th
-							><th class="w-10" title="Equipped">Eq</th><th class="w-10" title="Attuned">Att</th><th
+							><th>Item</th><th class="w-16">Qty</th><th class="w-20">Value GP</th><th
 								class="w-10"
-								title="Magic">Mag</th
-							><th class="w-28">Charges</th><th>Notes</th><th class="w-28">Container</th><th
-							></th></tr
+								title="Equipped">Eq</th
+							><th class="w-10" title="Attuned">Att</th><th class="w-10" title="Magic">Mag</th><th
+								class="w-28">Charges</th
+							><th>Notes</th><th class="w-28">Container</th><th></th></tr
 						>
 					</thead>
 					<tbody>
@@ -647,15 +613,6 @@
 										min="0"
 										class="num input w-14 input-xs"
 										bind:value={it.qty}
-									/></td
-								>
-								<td
-									><input
-										type="number"
-										min="0"
-										step="0.25"
-										class="num input w-16 input-xs"
-										bind:value={it.weight}
 									/></td
 								>
 								<td

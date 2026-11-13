@@ -981,7 +981,6 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 		w.text(loc, M, w.y, 9.5, w.b, ACCENT);
 		w.y -= 2;
 		w.label('Qty', M + 230, w.y - 9);
-		w.label('Lb', M + 262, w.y - 9);
 		w.label('GP', M + 292, w.y - 9);
 		w.label('Notes', M + 326, w.y - 9);
 		w.y -= 10;
@@ -1020,7 +1019,6 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 				size: 8
 			});
 			w.text(it.name, M, w.y, 8.5, it.magic ? w.b : w.f);
-			w.text(String(it.weight), M + 262, w.y, 8);
 			w.text(String(it.value), M + 292, w.y, 8);
 			notes.forEach((t, k) => w.text(t, M + 326, w.y - k * 9, 7.5, w.f, MUTED));
 			w.y -= (notes.length - 1) * 9;
