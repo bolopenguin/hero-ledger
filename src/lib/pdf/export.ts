@@ -899,32 +899,54 @@ export async function buildPdf(input: Character, packsUsed: ContentPack[]): Prom
 			// The material is printed under the spell, keep the column short.
 			const comp = spl.comp.replace(/\s*\(.*\)\s*$/, '');
 			const noteText = [spl.notes, pageRef(full)].filter(Boolean).join(' - ');
-			const notes = w.wrap(noteText, w.W - 440, 7.5);
+			// Every column wraps inside its own width, so long text never runs into the next one.
+			const cells: [string[], number, number, RGB, typeof w.f][] = [
+				[
+					w.wrap(
+						(spl.always ? '* ' : spl.prepared || spl.level === 0 ? '' : '( ) ') + spl.name,
+						140,
+						8.5,
+						w.b
+					),
+					24,
+					8.5,
+					INK,
+					w.b
+				],
+				[w.wrap(spl.time, 60, 7.5), 170, 7.5, INK, w.f],
+				[w.wrap(spl.range, 54, 7.5), 238, 7.5, INK, w.f],
+				// The C column already says Concentration.
+				[
+					w.wrap(spl.duration.replace(/^Concentration,\s*up to\s*/i, ''), 72, 7.5),
+					296,
+					7.5,
+					INK,
+					w.f
+				],
+				[
+					w.wrap([spl.conc ? 'C' : '', spl.ritual ? 'R' : ''].join(' ').trim(), 22, 7.5),
+					372,
+					7.5,
+					INK,
+					w.b
+				],
+				[
+					w.wrap(spl.cost ? `${comp} ${spl.cost}gp${spl.consumed ? '*' : ''}` : comp, 38, 7.5),
+					398,
+					7.5,
+					INK,
+					spl.cost ? w.b : w.f
+				],
+				[w.wrap(noteText, w.W - 440, 7.5), 440, 7.5, MUTED, w.f]
+			];
+			const rows = Math.max(1, ...cells.map((c) => c[0].length));
 			// Keep the row and the start of its text on the same page.
-			w.ensure(36 + (notes.length - 1) * 9);
+			w.ensure(36 + (rows - 1) * 9);
 			w.y -= 12;
 			w.text(spl.level === 0 ? 'C' : String(spl.level), M, w.y, 8, w.b);
-			w.text(
-				(spl.always ? '* ' : spl.prepared || spl.level === 0 ? '' : '( ) ') + spl.name,
-				M + 24,
-				w.y,
-				8.5,
-				w.b
-			);
-			w.text(spl.time, M + 170, w.y, 7.5);
-			w.text(spl.range, M + 238, w.y, 7.5);
-			// The C column already says Concentration.
-			w.text(spl.duration.replace(/^Concentration,\s*up to\s*/i, ''), M + 296, w.y, 7.5);
-			w.text([spl.conc ? 'C' : '', spl.ritual ? 'R' : ''].join(' '), M + 372, w.y, 7.5, w.b);
-			w.text(
-				spl.cost ? `${comp} ${spl.cost}gp${spl.consumed ? '*' : ''}` : comp,
-				M + 398,
-				w.y,
-				7.5,
-				spl.cost ? w.b : w.f
-			);
-			notes.forEach((t, k) => w.text(t, M + 440, w.y - k * 9, 7.5, w.f, MUTED));
-			w.y -= (notes.length - 1) * 9 + 1;
+			for (const [lines, x, size, color, font] of cells)
+				lines.forEach((t, k) => w.text(t, M + x, w.y - k * 9, size, font, color));
+			w.y -= (rows - 1) * 9 + 1;
 			if (full && spl.desc) {
 				w.para(spl.desc, M + 24, w.W - 24, 7.5, w.i, ACCENT, 1.3);
 				w.y -= 1.5;
