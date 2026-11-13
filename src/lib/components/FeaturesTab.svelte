@@ -12,7 +12,7 @@
 		openChoices,
 		originOf,
 		pbFor,
-		speed,
+		speciesSpeed,
 		startingChoices
 	} from '$lib/calc';
 	import { AB_NAMES, SKILLS } from '$lib/data/srd';
@@ -36,8 +36,12 @@
 				(filter === 'all' || (filter === 'picks' ? !!f.pick || f.src === 'Feat' : f.a === filter))
 		)
 	);
+	const customTop = $derived(list.filter((f) => f.src === 'Custom' && f.place === 'custom'));
+	const customOrigin = $derived(list.filter((f) => f.src === 'Custom' && f.place === 'origin'));
 	const origin = $derived(list.filter((f) => originOf(f)));
-	const byLevel = $derived(list.filter((f) => !originOf(f)));
+	const byLevel = $derived(
+		list.filter((f) => !originOf(f) && !(f.src === 'Custom' && f.place !== 'level'))
+	);
 	const levels = $derived([...new Set(byLevel.map((f) => f.l))].sort((a, b) => a - b));
 	// Choices still to make (feats, options, background skill and tools), linked to their card.
 	const todo = $derived(openChoices(ch, features(ch)));
@@ -69,8 +73,18 @@
 		['picks', 'Feats & choices']
 	];
 
-	function addFeature(l: number) {
-		ch.features.push({ id: uid(), l, n: '', d: '', a: 'passive', src: 'Custom', uses: '', r: '' });
+	function addFeature(l: number, place: 'origin' | 'level' | 'custom' = 'level') {
+		ch.features.push({
+			id: uid(),
+			l,
+			n: '',
+			d: '',
+			a: 'passive',
+			src: 'Custom',
+			uses: '',
+			r: '',
+			place
+		});
 	}
 </script>
 
@@ -88,7 +102,7 @@
 		<button
 			type="button"
 			class="btn ml-auto btn-primary btn-sm"
-			onclick={() => addFeature(ch.level)}><Plus class="size-4" /> Custom feature</button
+			onclick={() => addFeature(ch.level, 'custom')}><Plus class="size-4" /> Custom feature</button
 		>
 	</div>
 	<div class="mt-3 flex flex-wrap items-center gap-1.5">
@@ -138,6 +152,12 @@
 </section>
 
 <div class="mt-3 flex flex-col gap-3">
+	{#if customTop.length}
+		<section class="panel" aria-label="Custom features">
+			<span class="font-display text-xl leading-tight font-bold text-primary">Custom Features</span>
+			{#each customTop as f (f.key)}<FeatureCard {f} />{/each}
+		</section>
+	{/if}
 	{#if sp || bg}
 		<section class="panel grid gap-x-4 sm:grid-cols-[5.5rem_minmax(0,1fr)]" aria-label="Origin">
 			<div class="flex flex-row items-baseline gap-2 sm:flex-col sm:gap-0">
@@ -145,6 +165,7 @@
 				<span class="text-xs text-base-content/50">species & background</span>
 			</div>
 			<div class="min-w-0">
+				{#each customOrigin as f (f.key)}<FeatureCard {f} />{/each}
 				{#if sp}
 					<div class="flex flex-wrap items-baseline gap-x-3 border-b border-base-300 pb-1.5">
 						<span class="label-xs">Species</span>
@@ -154,7 +175,7 @@
 						<span class="text-sm text-base-content/60"
 							>{[
 								sp.size,
-								`Speed ${speed(ch)} ft`,
+								`Speed ${speciesSpeed(ch)} ft`,
 								darkvision(ch) && !origin.some((f) => /darkvision/i.test(f.n))
 									? `Darkvision ${darkvision(ch)} ft`
 									: ''

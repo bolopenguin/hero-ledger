@@ -303,6 +303,14 @@
 						/></label
 					>
 					<label class="flex flex-col text-xs"
+						>Listed in
+						<select class="select select-sm" bind:value={custom.place}>
+							<option value="custom">Custom Features</option>
+							<option value="origin">Origin</option>
+							<option value="level">Its level</option>
+						</select>
+					</label>
+					<label class="flex flex-col text-xs"
 						>Source<input
 							class="input input-sm"
 							bind:value={custom.src}

@@ -266,6 +266,8 @@ export interface CustomFeature {
 	src: string;
 	uses: string;
 	r: Recharge;
+	/** Where it is listed: the Origin block, its level, or the Custom Features section (default: level). */
+	place?: 'origin' | 'level' | 'custom';
 }
 
 export interface FeatureEdit {

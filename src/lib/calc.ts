@@ -233,6 +233,7 @@ export interface RFeature {
 	notes: string;
 	hidden: boolean;
 	customId?: string;
+	place?: 'origin' | 'level' | 'custom';
 	/** Key of the feature whose picker produced this feat. */
 	pickedBy?: string;
 	/** Feat key when this entry is a feat. */
@@ -453,11 +454,12 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 			edited: false,
 			notes: '',
 			hidden: false,
-			customId: cf.id
+			customId: cf.id,
+			place: cf.place ?? 'level'
 		});
 	}
 
-	const order = { Class: 0, Subclass: 1, Species: 2, Background: 3, Feat: 4, Custom: 5 };
+	const order = { Class: 0, Subclass: 1, Species: 2, Background: 3, Feat: 4, Custom: -1 };
 	out.sort((a, b) => a.l - b.l || order[a.src] - order[b.src]);
 	// A feat chosen through a picker comes right after the feature that offers it.
 	const keys = new Set(out.map((f) => f.key));
@@ -906,10 +908,14 @@ export function hpMax(ch: Character, sc = scores(ch)) {
 	return Math.max(1, ov(ch, 'hpMax', v));
 }
 
+/** The species' own walking Speed, before class features, armor and the like. */
+export function speciesSpeed(ch: Character) {
+	if (ch.speciesId === 'elf' && ch.lineage === 'wood') return 35;
+	return getSpecies(ch)?.speed ?? 30;
+}
+
 export function speed(ch: Character, sc = scores(ch)) {
-	const sp = getSpecies(ch);
-	let v = sp?.speed ?? 30;
-	if (ch.speciesId === 'elf' && ch.lineage === 'wood') v = 35;
+	let v = speciesSpeed(ch);
 	const armor = wornArmor(ch);
 	if (ch.classId === 'barbarian' && ch.level >= 5 && armor?.type !== 'heavy') v += 10;
 	if (ch.classId === 'monk' && ch.level >= 2 && !armor && !wornShields(ch).length)
