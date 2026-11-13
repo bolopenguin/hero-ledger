@@ -157,7 +157,8 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 		range: string,
 		conc: boolean,
 		d: string,
-		how?: string
+		how?: string,
+		mat?: { material?: string; cost?: number; consumed?: boolean }
 	) => {
 		const key = name.toLowerCase();
 		if (seen.has(key)) return;
@@ -175,7 +176,7 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 				: undefined,
 			name,
 			detail:
-				`${level === 0 ? 'Cantrip' : `Level ${level}`}${range ? `, ${range}` : ''}${conc ? ', Concentration' : ''}${slot === 'reaction' || slot === 'long' ? ` (${time})` : ''}. ${d}`.trim(),
+				`${level === 0 ? 'Cantrip' : `Level ${level}`}${range ? `, ${range}` : ''}${conc ? ', Concentration' : ''}${mat?.cost ? `, costs ${mat.cost} GP${mat.material ? ` (${mat.material.replace(/\s*worth.*$/i, '')})` : ''}${mat.consumed ? ', consumed' : ''}` : ''}${slot === 'reaction' || slot === 'long' ? ` (${time})` : ''}. ${d}`.trim(),
 			source: 'Spell',
 			uses: how
 		});
@@ -188,7 +189,9 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 				s.level,
 				s.range,
 				s.conc,
-				s.desc || lib.get(s.name.toLowerCase())?.d || ''
+				s.desc || lib.get(s.name.toLowerCase())?.d || '',
+				undefined,
+				s.cost ? s : lib.get(s.name.toLowerCase())
 			);
 	for (const g of grantedSpells(ch)) {
 		const d = lib.get(g.name.toLowerCase());
@@ -200,7 +203,8 @@ export function turnSummary(ch: Character): Record<TurnSlot, TurnEntry[]> {
 			d?.range ?? '',
 			!!d?.conc,
 			d?.d ?? '',
-			d?.level === 0 ? undefined : SPELL_KIND_LABEL[g.kind]
+			d?.level === 0 ? undefined : SPELL_KIND_LABEL[g.kind],
+			d
 		);
 	}
 
