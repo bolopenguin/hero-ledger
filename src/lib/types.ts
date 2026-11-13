@@ -33,6 +33,8 @@ export interface Feature {
 	spells?: SpellGrant[];
 	/** Lets the player pick entries from named option lists (invocations, metamagic, cantrips…). */
 	choose?: ChooseDef | ChooseDef[];
+	/** Extra damage this feature adds to attacks, listed under situational effects. */
+	rider?: Omit<Rider, 'id' | 'auto'>;
 }
 
 /**

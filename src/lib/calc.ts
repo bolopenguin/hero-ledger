@@ -233,6 +233,7 @@ export interface RFeature {
 	notes: string;
 	hidden: boolean;
 	customId?: string;
+	rider?: Feature['rider'];
 	place?: 'origin' | 'level' | 'custom';
 	/** Key of the feature whose picker produced this feat. */
 	pickedBy?: string;
@@ -317,6 +318,7 @@ export function features(ch: Character, maxLevel = ch.level): RFeature[] {
 			d,
 			spells: f.spells ?? parseGrants(d),
 			choose: resolveChoices(f.choose, key, c),
+			rider: f.rider,
 			a: f.a,
 			src,
 			uses: usesOf(f, c),
@@ -1087,6 +1089,9 @@ export function autoRiders(ch: Character, sc = scores(ch)): Rider[] {
 			const { with: also, ...rest } = sr;
 			add({ ...rest, state: [st.id, ...(also ?? [])] });
 		}
+	for (const f of features(ch))
+		if (f.rider && !f.hidden)
+			add({ ...f.rider, id: `feature:${f.key}`, dmg: fillTemplate(f.rider.dmg, c) });
 	for (const f of activeFeats(ch))
 		if (f.def.rider)
 			add({ ...f.def.rider, id: `feat:${f.key}`, dmg: fillTemplate(f.def.rider.dmg, c) });
