@@ -34,7 +34,7 @@
 		advantages,
 		describe
 	} from '$lib/advantage';
-	import { uid } from '$lib/store.svelte';
+	import { resetBackground, uid } from '$lib/store.svelte';
 
 	const ch = $derived(currentChar());
 	const sc = $derived(scores(ch));
@@ -224,7 +224,7 @@
 					id="char-bg"
 					class="select select-sm"
 					bind:value={ch.backgroundId}
-					onchange={() => (ch.bgAsi = {})}
+					onchange={() => resetBackground(ch)}
 				>
 					{#if packs.list.some((p) => Object.keys(p.backgrounds ?? {}).length)}
 						<optgroup label="Built in">
@@ -475,7 +475,9 @@
 						: ''}">Skills picked: {skillsPicked}/{skillsExpected}</span
 			>
 			<span class="text-base-content/55"
-				>· {skillSources.map(([t, n]) => `${t} (${n})`).join(' · ')}{bg
+				>· Class skills can also be picked on the Class & features tab · {skillSources
+					.map(([t, n]) => `${t} (${n})`)
+					.join(' · ')}{bg
 					? ` · background skills, and skills chosen in species traits and feats (Class & features tab), are added for you`
 					: ''}</span
 			>
@@ -621,7 +623,7 @@
 					<span class="text-base-content/70">{toolProficiencies(ch).join(', ') || '—'}</span>
 					{#if startingChoices(ch).some((cd) => (ch.choices[cd.key]?.length ?? 0) < cd.count)}
 						<a href="#features" class="link text-xs text-warning"
-							>Skills and tools still to choose: Class & features tab</a
+							>Tools still to choose: Class & features tab</a
 						>
 					{/if}
 					<input class="line-input" placeholder="other tools" bind:value={ch.prof.tools} />

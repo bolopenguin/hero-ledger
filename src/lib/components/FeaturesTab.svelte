@@ -19,6 +19,7 @@
 	import { ABILITIES } from '$lib/types';
 	import { uid } from '$lib/store.svelte';
 	import BackgroundScores from './BackgroundScores.svelte';
+	import ClassSkills from './ClassSkills.svelte';
 	import ClassSummary from './ClassSummary.svelte';
 	import FeatureCard from './FeatureCard.svelte';
 	import OptionChooser from './OptionChooser.svelte';
@@ -89,6 +90,7 @@
 </script>
 
 <ClassSummary />
+<ClassSkills />
 {#each startingChoices(ch).filter((x) => x.key === 'tools:class') as cd (cd.key)}
 	<div id="class-tools" class="panel mt-3 scroll-mt-28">
 		<span class="label-xs">{cd.source}</span>

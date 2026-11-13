@@ -401,3 +401,17 @@ export function deleteCharacter(id: string) {
 	if (!app.chars.length) app.chars = [blankCharacter()];
 	if (!app.chars.some((c) => c.id === app.currentId)) app.currentId = app.chars[0].id;
 }
+
+/**
+ * Forget everything tied to the old background: ability score split, its skill and tool
+ * choices, and the picks, choices, edits and uses of its (and its Origin feat's) features.
+ */
+export function resetBackground(ch: Character) {
+	ch.bgAsi = {};
+	const old = (k: string) =>
+		k === 'skills:background' ||
+		k === 'tools:background' ||
+		/^(Feat\|)?Background\|/.test(k.replace(/~\d+$/, ''));
+	for (const rec of [ch.picks, ch.choices, ch.edits, ch.used] as Record<string, unknown>[])
+		for (const k of Object.keys(rec)) if (old(k)) delete rec[k];
+}
