@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/bolopenguin/hero-ledger/actions/workflows/ci.yml"><img src="https://github.com/bolopenguin/hero-ledger/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://github.com/bolopenguin/hero-ledger/actions/workflows/deploy.yml"><img src="https://github.com/bolopenguin/hero-ledger/actions/workflows/deploy.yml/badge.svg" alt="Deploy status"></a>
+  <a href="https://github.com/bolopenguin/hero-ledger/actions/workflows/release.yml"><img src="https://github.com/bolopenguin/hero-ledger/actions/workflows/release.yml/badge.svg" alt="Release status"></a>
 </p>
 
 **Hero Ledger** is a free character sheet builder for **Dungeons & Dragons 2024** (the "5.5" rules). You pick a class, a species and a background, and it works out everything else: your modifiers, skills, hit points, attacks, armor class, spell slots and what each feature does at your level. When you are happy with your hero, you print a clean, fillable PDF to play with at the table.
@@ -118,16 +118,28 @@ docs/            documentation and the images used in this README
 
 The rules live in `data/` and are applied by pure functions in `calc.ts`, so the same results feed the screen and the PDF, and the tests can check them without a browser. A saved character stores only the player's choices; everything else is calculated each time. Older saves are upgraded when they are loaded.
 
-### Continuous integration and deployment
+### Continuous integration, versions and deployment
 
 Two GitHub Actions workflows in `.github/workflows/`, sharing one setup step in `.github/actions/setup/`:
 
 - **CI** (`ci.yml`) runs on every pull request into `main`: formatting, type-check, tests and a build. The build uses the same base path as the live site, so path mistakes show up before merging.
-- **Deploy** (`deploy.yml`) runs on every push to `main`. It repeats the same checks and, only if they pass, publishes the built site to GitHub Pages. You can also start it by hand from the Actions tab.
+- **Release** (`release.yml`) runs on every push to `main`. It checks and builds the site, then looks at the commit messages since the last version and decides whether there is a new one. If there is, it creates a git tag and a GitHub release with notes (the built site is attached as a zip) and publishes the site to GitHub Pages. If not, the live site stays as it is. You can also start it by hand from the Actions tab to publish the current build.
+
+Versions follow [Semantic Versioning](https://semver.org) and are worked out from [Conventional Commits](https://www.conventionalcommits.org) by [semantic-release](https://semantic-release.gitbook.io) (settings in `.releaserc.json`):
+
+| Commit message                                                     | Effect                                       |
+| ------------------------------------------------------------------ | -------------------------------------------- |
+| `feat: add a spell picker`                                         | new minor version, for example 0.3.0 → 0.4.0 |
+| `fix: wrong AC with a shield`                                      | new patch version, for example 0.3.0 → 0.3.1 |
+| `perf: …`                                                          | new patch version                            |
+| `feat!: …`, or a `BREAKING CHANGE:` line in the message            | new major version                            |
+| `docs:`, `chore:`, `ci:`, `test:`, `refactor:`, `style:`, `build:` | no release, no deploy                        |
+
+A scope is optional: `fix(pdf): wrap long spell names`. The version is the git tag, not the number in `package.json`.
 
 One-time setup for a fork: in **Settings → Pages**, set **Source** to **GitHub Actions**.
 
-The site lives under `/<repository-name>/` on GitHub Pages, so the deploy builds with the `BASE_PATH` environment variable set. Locally, and on any host that serves the site at the root, it is empty. To host somewhere else, run `yarn build` and publish the `build/` folder. A `netlify.toml` is included for Netlify.
+The site lives under `/<repository-name>/` on GitHub Pages, so the build runs with the `BASE_PATH` environment variable set. Locally, and on any host that serves the site at the root, it is empty. To host somewhere else, download the zip from a release, or run `yarn build` and publish the `build/` folder. A `netlify.toml` is included for Netlify.
 
 ## License
 

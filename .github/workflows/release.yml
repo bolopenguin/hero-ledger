@@ -1,0 +1,133 @@
+name: Release
+
+# Every push to main is checked and built. Then the commit messages decide what happens:
+#   feat:  -> new minor version      fix:, perf:  -> new patch version
+#   a "!" after the type, or a "BREAKING CHANGE:" line  -> new major version
+# A new version gets a git tag, a GitHub release with notes, and the site is published to
+# GitHub Pages. Other commits (docs:, chore:, ci:, test:…) change nothing on the live site.
+# One-time setup: repository Settings -> Pages -> Source: "GitHub Actions".
+on:
+  push:
+    branches: [main]
+  # Publish the current build even when no commit asks for a new version.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Releases must not overlap, and a running one is allowed to finish.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Node and dependencies
+        uses: ./.github/actions/setup
+
+      - name: Check formatting
+        run: yarn lint
+
+      - name: Type-check
+        run: yarn check
+
+      - name: Run the tests
+        run: yarn test
+
+      - name: Build the site
+        run: yarn build
+        env:
+          # GitHub Pages serves the site under /<repository-name>/.
+          BASE_PATH: /${{ github.event.repository.name }}
+
+      # The same build, as a download for people who want to host it themselves.
+      - name: Zip the site
+        run: cd build && zip -qr ../site.zip .
+
+      - name: Keep the zip for the release
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-zip
+          path: site.zip
+          retention-days: 1
+
+      - name: Upload the site for GitHub Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build
+
+  release:
+    name: Version and release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # creates the tag and the GitHub release
+    outputs:
+      released: ${{ steps.semantic.outputs.new_release_published }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
+      tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Reads the commit messages since the last tag and, if they call for it, creates the
+      # next version. The rules are in .releaserc.json.
+      - name: Work out the next version
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v8.1.4
+        with:
+          semantic_version: 25
+          # Needed for the "conventionalcommits" preset in .releaserc.json (understands "feat!:").
+          extra_plugins: conventional-changelog-conventionalcommits@9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download the zip of the site
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: site-zip
+
+      - name: Attach the zip to the release
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.semantic.outputs.new_release_git_tag }}
+          VERSION: ${{ steps.semantic.outputs.new_release_version }}
+        run: |
+          mv site.zip "hero-ledger-${VERSION}-site.zip"
+          gh release upload "$TAG" "hero-ledger-${VERSION}-site.zip#Hero Ledger ${VERSION}: static site" \
+            --repo "$GITHUB_REPOSITORY"
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: [build, release]
+    if: needs.release.outputs.released == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
