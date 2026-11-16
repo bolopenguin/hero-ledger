@@ -1,0 +1,41 @@
+name: CI
+
+# Runs on every pull request into main. Nothing is deployed from here.
+on:
+  pull_request:
+    branches: [main]
+
+# A new push to the same pull request cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format, types, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node and dependencies
+        uses: ./.github/actions/setup
+
+      - name: Check formatting
+        run: yarn lint
+
+      - name: Type-check
+        run: yarn check
+
+      - name: Run the tests
+        run: yarn test
+
+      # Built the way the deploy builds it, so a broken base path shows up here first.
+      - name: Build the site
+        run: yarn build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}

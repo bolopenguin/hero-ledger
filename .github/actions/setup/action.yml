@@ -1,0 +1,20 @@
+name: Set up Node and install dependencies
+description: Install the Node version from .nvmrc and the locked Yarn dependencies, with caching.
+
+runs:
+  using: composite
+  steps:
+    # The Yarn version is pinned in package.json ("packageManager"); Corepack provides it.
+    - name: Enable Corepack
+      shell: bash
+      run: corepack enable
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: yarn
+
+    - name: Install dependencies
+      shell: bash
+      run: yarn install --immutable

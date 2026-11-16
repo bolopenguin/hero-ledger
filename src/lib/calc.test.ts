@@ -461,7 +461,7 @@ describe('your turn summary', () => {
 		expect(names('reaction')).toEqual(expect.arrayContaining(['Opportunity Attack', 'Shield']));
 		expect(names('onhit')).toContain('Action Surge');
 		expect(names('long')).not.toContain('Alarm'); // not prepared
-		expect(t.action[0].lines?.[0]).toBe('Longsword: +7 to hit, 1d8 + 4 Slashing');
+		expect(t.action[0].lines?.[0]).toBe('Longsword: +7 to hit, 1d8 + 4 Slashing, Sap');
 	});
 });
 

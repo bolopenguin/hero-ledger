@@ -283,8 +283,12 @@ export function sampleCharacter(): Character {
 		bgAsi: { str: 2, con: 1 },
 		skills: { perception: 1, survival: 1 },
 		hp: { current: 49, temp: 0 },
-		prof: { armor: '', weapons: '', tools: 'Dice set', languages: 'Common, Dwarvish', senses: '' }
+		prof: { armor: '', weapons: '', tools: '', languages: 'Common, Dwarvish', senses: '' }
 	});
+	ch.choices = {
+		'tools:background': ['dice-set'],
+		'Class|1|Weapon Mastery': ['longsword', 'greataxe', 'javelin', 'handaxe']
+	};
 	ch.picks = {
 		'Class|1|Fighting Style': { feat: 'gwf' },
 		'Class|4|Ability Score Improvement': { feat: 'asi', asi: { str: 2 } }
